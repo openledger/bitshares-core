@@ -184,7 +184,7 @@ namespace graphene { namespace chain {
       };
    }
 
-   namespace impl { // TODO: remove after HARDFORK_413_TIME has passed
+   namespace impl { // TODO: remove after HARDFORK_CORE_188_TIME has passed
       class hf_413_visitor {
          public:
             typedef void result_type;
