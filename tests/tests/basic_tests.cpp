@@ -598,4 +598,22 @@ BOOST_AUTO_TEST_CASE( bitasset_feed_expiration_test )
    BOOST_CHECK( !o.feed_is_expired( now ) );
 }
 
+BOOST_AUTO_TEST_CASE( define_accounts_test )
+{
+   ACTORS((alice)(bob)(izzy)(jill));
+   auto check_names = [&](){
+      BOOST_CHECK_EQUAL(alice.name, "alice");
+      BOOST_CHECK_EQUAL(bob.name,   "bob");
+      BOOST_CHECK_EQUAL(izzy.name,  "izzy");
+      BOOST_CHECK_EQUAL(jill.name,  "jill");
+   };
+
+   check_names();
+
+   generate_blocks(1);
+
+   check_names();
+}
+
+
 BOOST_AUTO_TEST_SUITE_END()
