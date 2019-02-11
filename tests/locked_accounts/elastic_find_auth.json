@@ -1,0 +1,12 @@
+{
+  "_source": ["object_id", "active_account_auths", "owner_account_auths"],
+  "query":{
+    "bool":{
+      "should":[
+        {"bool":{"must_not":{"term":{"active_account_auths.keyword":"[]"}}}},
+        {"bool":{"must_not":{"term":{"owner_account_auths.keyword":"[]"}}}}
+      ]
+   }
+ }
+}
+
