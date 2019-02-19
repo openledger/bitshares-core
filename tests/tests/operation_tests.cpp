@@ -2750,4 +2750,80 @@ BOOST_AUTO_TEST_CASE( vesting_balance_withdraw_test )
 
 // TODO:  Write linear VBO tests
 
+
+BOOST_AUTO_TEST_CASE( owner_delegation_test )
+{
+   try {
+      ACTORS( (alice) (bob) (jill) (izzy) (jill1) (jill2));
+
+      generate_blocks(HARDFORK_CYCLED_ACCOUNTS_TIME - 1000);
+      set_expiration( db, trx );
+
+      const auto alice_active_key = fc::ecc::private_key::regenerate(fc::digest("alice_active"));
+      const auto alice_owner_key  = fc::ecc::private_key::regenerate(fc::digest("alice_owner"));
+
+      trx.clear();
+
+      // Alice shares owner authority with Jill
+      {
+         account_update_operation auo;
+         auo.account = alice_id;
+         auo.owner = authority(2, public_key_type(alice_owner_key.get_public_key()), 2, jill_id, 2);
+         auo.active = authority(3, public_key_type(alice_active_key.get_public_key()), 2, bob_id, 2, izzy_id, 2);
+         trx.operations.push_back(auo);
+         sign( trx, alice_private_key );
+         PUSH_TX( db, trx);
+         trx.clear();
+      }
+
+       // try update Alice's owner with active auth
+      {
+         account_update_operation auo;
+         auo.account = alice_id;
+         auo.owner = authority(1, jill1_id, 1);
+         trx.operations.push_back(auo);
+         sign( trx, bob_private_key );
+         sign( trx, izzy_private_key );
+         GRAPHENE_CHECK_THROW(PUSH_TX( db, trx ), fc::exception);
+         trx.clear();
+      }
+
+      // Jill delegates active auth to jill1 and jill2
+      {
+         account_update_operation auo;
+         auo.account = jill_id;
+         auo.active = authority(4, jill1_id, 2, jill2_id, 2);
+         trx.operations.push_back(auo);
+         sign( trx, jill_private_key );
+         PUSH_TX( db, trx);
+         trx.clear();
+      }
+
+      // Jill2 and Jill1 can't change Jill's owner auth
+      {
+         account_update_operation auo;
+         auo.account = jill_id;
+         auo.owner = authority(1, jill1_id, 1);
+         trx.operations.push_back(auo);
+         sign( trx, jill1_private_key );
+         sign( trx, jill2_private_key );
+         GRAPHENE_CHECK_THROW(PUSH_TX( db, trx ), fc::exception);
+         trx.clear();
+      }
+
+      // Jill2 and Jill1 are able to change Alice's owner auth.
+      {
+         account_update_operation auo;
+         auo.account = alice_id;
+         auo.owner = authority(1, jill1_id, 1);
+         trx.operations.push_back(auo);
+         sign( trx, jill1_private_key );
+         sign( trx, jill2_private_key );
+         PUSH_TX( db, trx);
+         trx.clear();
+      }
+   }
+   FC_LOG_AND_RETHROW()
+}
+
 BOOST_AUTO_TEST_SUITE_END()
