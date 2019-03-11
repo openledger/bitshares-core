@@ -3,7 +3,6 @@
 #include <graphene/chain/hardfork.hpp>
 #include "../common/database_fixture.hpp"
 
-
 using namespace graphene::chain;
 using namespace graphene::chain::test;
 using namespace graphene::chain::detail;
@@ -12,6 +11,8 @@ using namespace graphene::chain::detail;
 
 namespace graphene { namespace chain {namespace detail {
    const trade_statistics_object* get_trade_statistics(const database &db, const account_id_type& account_id, const asset_id_type &asset_id);
+   void adjust_trade_statistics(database &db, const account_id_type& account_id, const asset& amount);
+   int get_sliding_statistic_window_days();
 }}}
 
 namespace graphene { namespace chain {
@@ -754,6 +755,36 @@ BOOST_AUTO_TEST_CASE( update_uia_dmf_with_incorrect_maker_amount_test )
       trx.operations.push_back(op);
       GRAPHENE_REQUIRE_THROW(PUSH_TX( db, trx, ~0 ), fc::exception);
 
+} FC_LOG_AND_RETHROW() }
+
+BOOST_AUTO_TEST_CASE( sliding_windows_interval_test )
+{
+   try {
+      ACTORS((alice));
+      generate_block();
+
+      auto check_statistics = [&](const account_id_type& account_id, const asset_id_type &asset_id, const share_type expected_amount) {
+         auto statistic = get_trade_statistics(db, account_id, asset_id);
+         BOOST_CHECK_EQUAL(statistic->total_volume.amount, expected_amount);
+      };
+
+      adjust_trade_statistics(db, alice_id, asset{20, asset_id_type{1}});
+      adjust_trade_statistics(db, alice_id, asset{60, asset_id_type{2}});
+
+      check_statistics(alice_id, asset_id_type{1}, 20);
+      check_statistics(alice_id, asset_id_type{2}, 60);
+
+      generate_blocks(db.get_dynamic_global_properties().next_maintenance_time);
+      check_statistics(alice_id, asset_id_type{1}, 20);
+      check_statistics(alice_id, asset_id_type{2}, 60);
+
+      generate_blocks( db.get_dynamic_global_properties().next_maintenance_time + fc::days(get_sliding_statistic_window_days()) );
+      check_statistics(alice_id, asset_id_type{1}, 19);
+      check_statistics(alice_id, asset_id_type{2}, 58);
+
+      generate_blocks( db.get_dynamic_global_properties().next_maintenance_time + fc::days(2 * get_sliding_statistic_window_days()) );
+      check_statistics(alice_id, asset_id_type{1}, 18);
+      check_statistics(alice_id, asset_id_type{2}, 56);
 } FC_LOG_AND_RETHROW() }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -46,6 +46,35 @@
 #include <graphene/chain/worker_object.hpp>
 
 namespace graphene { namespace chain {
+namespace detail {
+
+   constexpr int get_sliding_statistic_window_days()
+   {
+      return 30;
+   }
+
+   const auto sliding_statistic_windows_interval = fc::days(get_sliding_statistic_window_days());
+
+   void update_trade_statistic(database &db)
+   {
+      auto& trade_statistics = db.get_index_type<trade_statistics_index>().indices().get<by_account_asset>();
+      for(const auto& statistic : trade_statistics)
+      {
+         if ( (statistic.total_volume.amount > 0) && ( (db.head_block_time() - statistic.first_trade_date) >= sliding_statistic_windows_interval) )
+         {
+            db.modify(statistic, [&]( trade_statistics_object& tso ) {
+               tso.first_trade_date = tso.first_trade_date + fc::days(1);
+
+                // calculate the rest of total_volume according to rule:
+                // (get_sliding_statistic_window_days - 1) * total_volume / get_sliding_statistic_window_days
+               const auto &base = asset( get_sliding_statistic_window_days() * tso.total_volume.amount, tso.total_volume.asset_id);
+               const auto &quote = asset( ( get_sliding_statistic_window_days() - 1 ) * tso.total_volume.amount, tso.total_volume.asset_id);
+               tso.total_volume = std::move(tso.total_volume * price(base, quote));
+            });
+         }
+      }
+   }
+}
 
 template<class Index>
 vector<std::reference_wrapper<const typename Index::object_type>> database::sort_votable_objects(size_t count) const
@@ -1274,6 +1303,13 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
          auto y = (head_block_time() - next_maintenance_time).to_seconds() / maintenance_interval;
          next_maintenance_time += (y+1) * maintenance_interval;
       }
+   }
+
+   const auto one_day = fc::days(1).to_seconds();
+   const auto delta = next_maintenance_time.sec_since_epoch() / one_day - dgpo.time.sec_since_epoch() / one_day;
+   if (delta > 0)
+   {
+      detail::update_trade_statistic(*this);
    }
 
    if( (dgpo.next_maintenance_time < HARDFORK_613_TIME) && (next_maintenance_time >= HARDFORK_613_TIME) )
