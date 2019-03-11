@@ -127,7 +127,7 @@ namespace graphene { namespace chain { namespace detail {
       return {};
    }
 
-} //detail
+} // detail
 
 /**
  * All margin positions are force closed at the swan price
@@ -914,10 +914,27 @@ bool database::fill_limit_order( const limit_order_object& order, const asset& p
 
    bool after_hardfork_DYNAMIC_FEE = ( head_block_time() >= HARDFORK_DYNAMIC_FEE_TIME );
 
-   auto issuer_fees = ( head_block_time() < HARDFORK_1268_TIME ) ? 
-         pay_market_fees(recv_asset, receives) : 
-         pay_market_fees(seller, is_maker, recv_asset, receives, after_hardfork_DYNAMIC_FEE);
-      
+   const auto issuer_fees = after_hardfork_DYNAMIC_FEE ?
+                              calculate_market_fee( seller, is_maker, recv_asset, receives ) :
+                              calculate_market_fee( recv_asset, receives );
+
+   FC_ASSERT( issuer_fees <= receives, "Market fee shouldn't be greater than receives" );
+
+   if ( head_block_time() < HARDFORK_1268_TIME ) 
+   {
+      pay_market_fees(recv_asset, issuer_fees);
+   }
+   else
+   {
+      // TODO 
+      // registrar_reward = split_pay(seller, issuer_fees)
+      // referrer_reward = split_pay(seller, registrar_reward)
+      // pay_market_fees(recv_asset, issuer_fees - registrar_reward - referrer_reward)
+      // deposit_market_fee_vesting_balance(seller.registrar, registrar_reward);
+      // deposit_market_fee_vesting_balance(seller.referrer, referrer_reward);
+      pay_market_fees(seller, recv_asset, issuer_fees);
+   }
+         
    pay_order( seller, receives - issuer_fees, pays );
 
    assert( pays.asset_id != receives.asset_id );
@@ -1024,6 +1041,8 @@ bool database::fill_call_order( const call_order_object& order, const asset& pay
    push_applied_operation( fill_order_operation( order.id, order.borrower, pays, receives,
                                                  asset(0, pays.asset_id), fill_price, is_maker ) );
 
+   // TODO update trade statistics for order.borrower (DYNAMIC_FEE)
+
    if( collateral_freed.valid() )
       remove( order );
 
@@ -1035,7 +1054,17 @@ bool database::fill_settle_order( const force_settlement_object& settle, const a
 { try {
    bool filled = false;
 
-   auto issuer_fees = pay_market_fees(get(receives.asset_id), receives);
+   // TODO
+   // const auto issuer_fees = after_hardfork_DYNAMIC ?
+   //                            calculate_market_fee( settle.owner, is_maker, recv_asset, receives ) :
+   //                            calculate_market_fee( recv_asset, receives );
+
+   const auto &trade_asset = get(receives.asset_id);
+   const auto issuer_fees = calculate_market_fee( trade_asset, receives );
+   FC_ASSERT( issuer_fees <= receives, "Market fee shouldn't be greater than receives" );
+
+   pay_market_fees(trade_asset, issuer_fees);
+   // TODO pay_market_fees (1268 - fee sharing)
 
    if( pays < settle.balance )
    {
@@ -1050,6 +1079,8 @@ bool database::fill_settle_order( const force_settlement_object& settle, const a
 
    assert( pays.asset_id != receives.asset_id );
    push_applied_operation( fill_order_operation( settle.id, settle.owner, pays, receives, issuer_fees, fill_price, is_maker ) );
+
+   // TODO update trade statistics for settle.owner (DYNAMIC_FEE)
 
    if (filled)
       remove(settle);
@@ -1346,26 +1377,13 @@ asset database::calculate_market_fee(const account_object& fee_payer, const bool
    return percent_fee;
 }
 
-asset database::pay_market_fees( const asset_object& recv_asset, const asset& receives )
+void database::pay_market_fees( const asset_object& trade_asset, const asset& owner_fees )
 {
-   auto issuer_fees = calculate_market_fee( recv_asset, receives );
-   FC_ASSERT( issuer_fees <= receives, "Market fee shouldn't be greater than receives");
-
-   detail::accumulate_fees_to_be_paid( *this, recv_asset, issuer_fees );
-
-   return issuer_fees;
+   detail::accumulate_fees_to_be_paid( *this, trade_asset, owner_fees );
 }
 
-asset database::pay_market_fees(const account_object& fee_payer, const bool is_maker, 
-                                const asset_object& recv_asset, const asset& receives,
-                                const bool after_hardfork_DYNAMIC)
+void database::pay_market_fees( const account_object& fee_payer, const asset_object& recv_asset, const asset& issuer_fees )
 {
-   const auto issuer_fees = after_hardfork_DYNAMIC ?
-                              calculate_market_fee( fee_payer, is_maker, recv_asset, receives ) :
-                              calculate_market_fee( recv_asset, receives );
-
-   FC_ASSERT( issuer_fees <= receives, "Market fee shouldn't be greater than receives");
-   
    // Don't dirty undo state if not actually collecting any fees
    if ( issuer_fees.amount > 0 )
    {
@@ -1411,8 +1429,6 @@ asset database::pay_market_fees(const account_object& fee_payer, const bool is_m
          obj.accumulated_fees += issuer_fees.amount - reward.amount;
       });
    }
-
-   return issuer_fees;
 }
 
 std::pair<uint16_t, uint16_t> database::get_dynamic_market_fee_percent(const account_id_type& fee_payer_id, 

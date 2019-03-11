@@ -120,6 +120,26 @@ struct dynamic_market_fee_database_fixture : database_fixture
       }
       FC_LOG_AND_RETHROW()
    }
+
+   void update_uia_to_dynamic_with_market_sharing(const string& name, uint16_t dynamic_percent, uint16_t reward_percent)
+   { try {
+      const auto& uia = get_asset(name);
+
+      asset_update_operation op;
+
+      op.issuer = uia.issuer;
+      op.asset_to_update = uia.id;
+      op.new_options = uia.options;
+      op.new_options.flags |= (charge_dynamic_market_fee | charge_market_fee);
+
+      dynamic_fee_table fee_table = { .maker_fee = {{0,dynamic_percent}}, .taker_fee = {{0,dynamic_percent}} };
+      op.new_options.extensions.value = {reward_percent, {}, fee_table}; 
+
+      trx.operations = {op};
+      PUSH_TX( db, trx, ~0 );
+      trx.operations.clear();
+
+   } FC_LOG_AND_RETHROW() }
 };
 
 BOOST_FIXTURE_TEST_SUITE( dynamic_market_fee_tests, dynamic_market_fee_database_fixture )
@@ -856,6 +876,35 @@ BOOST_AUTO_TEST_CASE( sliding_windows_interval_test )
       check_statistics(alice_id, asset_id_type{1}, 18);
       check_statistics(alice_id, asset_id_type{2}, 56);
 } FC_LOG_AND_RETHROW() }
+
+BOOST_AUTO_TEST_CASE( user_pays_dynamic_fee_that_shared_to_registrar )
+{
+   auto dynamic_and_sharing_time = std::max(HARDFORK_1268_TIME, HARDFORK_DYNAMIC_FEE_TIME);
+   generate_blocks(dynamic_and_sharing_time);
+   set_expiration( db, trx );
+
+   issue_asset();
+
+   GET_ACTOR(alice);
+   GET_ACTOR(bob);
+
+   auto dynamic_percent = 200;
+   auto reward_percent = 4000;
+   update_uia_to_dynamic_with_market_sharing("JILLCOIN", dynamic_percent, reward_percent);
+
+   const asset_object &jillcoin = get_asset("JILLCOIN");
+   const asset_object &izzycoin = get_asset("IZZYCOIN");
+
+   // Alice and Bob place orders which match
+   create_sell_order( alice_id, izzycoin.amount(100), jillcoin.amount(1000) );
+   create_sell_order( bob_id, jillcoin.amount(1000), izzycoin.amount(100) );
+
+   const auto expected_fees = 1000 * dynamic_percent / GRAPHENE_100_PERCENT;
+   const auto expected_rewards = expected_fees * reward_percent / GRAPHENE_100_PERCENT;
+   share_type alice_registrar_reward = get_market_fee_reward( alice.registrar, jillcoin.get_id() );
+
+   BOOST_CHECK_EQUAL(alice_registrar_reward, expected_rewards);
+}
 
 BOOST_AUTO_TEST_CASE( apply_dynamic_fee_corresponding_trade_statistics )
 {
