@@ -3416,7 +3416,14 @@ vector<force_settlement_object> wallet_api::get_settle_orders(std::string a, uin
    return my->_remote_db->get_settle_orders(a, limit);
 }
 
-vector<collateral_bid_object> wallet_api::get_collateral_bids(std::string asset, uint32_t limit, uint32_t start)const
+pair<uint16_t, uint16_t> wallet_api::get_dynamic_market_fee_percent( const string &buyer_name_or_id,
+                                                                     const string &asset_symbol_or_id ) const
+{
+   return my->_remote_db->get_dynamic_market_fee_percent(get_account(buyer_name_or_id).id,
+                                                         get_asset(asset_symbol_or_id).id);
+}
+
+vector<collateral_bid_object> wallet_api::get_collateral_bids(string asset, uint32_t limit, uint32_t start)const
 {
    return my->_remote_db->get_collateral_bids(asset, limit, start);
 }

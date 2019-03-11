@@ -432,6 +432,17 @@ class wallet_api
       vector<call_order_object>         get_call_orders(string a, uint32_t limit)const;
       vector<force_settlement_object>   get_settle_orders(string a, uint32_t limit)const;
 
+      /**
+       * @brief Get current market fee percent.
+       *
+       * @param buyer_id_or_name The ID or name of the account whose dynamic fee percent should be retrieved
+       * @param asset_symbol_or_id The ID or name of the asset being purchased
+       * @return The couple of maker's and taker's dynamic fee percent
+       */
+      pair<uint16_t, uint16_t> get_dynamic_market_fee_percent( const string &buyer_name_or_id,
+                                                               const string &asset_symbol_or_id ) const;
+
+
       /** Returns the collateral_bid object for the given MPA
        *
        * @param asset the name or id of the asset
@@ -1874,6 +1885,7 @@ FC_API( graphene::wallet::wallet_api,
         (get_limit_orders)
         (get_call_orders)
         (get_settle_orders)
+        (get_dynamic_market_fee_percent)
         (save_wallet_file)
         (serialize_transaction)
         (sign_transaction)
