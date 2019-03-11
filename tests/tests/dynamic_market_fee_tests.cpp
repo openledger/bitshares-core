@@ -96,7 +96,7 @@ struct dynamic_market_fee_database_fixture : database_fixture
 
 BOOST_FIXTURE_TEST_SUITE( dynamic_market_fee_tests, dynamic_market_fee_database_fixture )
 
-BOOST_AUTO_TEST_CASE(adjust_trade_statistics_test_before_HARDFORK_DYNAMIC_FEE_TIME_hf)
+BOOST_AUTO_TEST_CASE( adjust_trade_statistics_test_before_HARDFORK_DYNAMIC_FEE_TIME_hf_test )
 {
    try
    {
@@ -127,7 +127,7 @@ BOOST_AUTO_TEST_CASE(adjust_trade_statistics_test_before_HARDFORK_DYNAMIC_FEE_TI
    } FC_LOG_AND_RETHROW()
 }
 
-BOOST_AUTO_TEST_CASE(adjust_trade_statistics_test_after_HARDFORK_DYNAMIC_FEE_TIME_hf)
+BOOST_AUTO_TEST_CASE( adjust_trade_statistics_test_after_HARDFORK_DYNAMIC_FEE_TIME_hf_test )
 {
    try
    {
@@ -168,13 +168,10 @@ BOOST_AUTO_TEST_CASE(adjust_trade_statistics_test_after_HARDFORK_DYNAMIC_FEE_TIM
    FC_LOG_AND_RETHROW()
 }
 
-BOOST_AUTO_TEST_CASE( create_uia_dmf_table_not_available_before_HARDFORK_DYNAMIC_FEE_TIME_hf )
+BOOST_AUTO_TEST_CASE( create_uia_dmf_table_not_available_before_HARDFORK_DYNAMIC_FEE_TIME_hf_test )
 {
    try {
-      generate_blocks(HARDFORK_DYNAMIC_FEE_TIME);
-      set_expiration( db, trx );
-
-      dynamic_fee_table fee_table = {.maker_fee = {{1,10}, {2, 30}}, .taker_fee = {{10,10}, {20, 30}}};
+      dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {2, 30}}, .taker_fee = {{0,10}, {20, 30}}};
       additional_asset_options options = {.dynamic_fees = fee_table};
 
       asset_create_operation creator = std::move(get_create_operation());
@@ -185,7 +182,32 @@ BOOST_AUTO_TEST_CASE( create_uia_dmf_table_not_available_before_HARDFORK_DYNAMIC
 
 } FC_LOG_AND_RETHROW() }
 
-BOOST_AUTO_TEST_CASE( create_uia_dmf_flag_not_available_before_HARDFORK_DYNAMIC_FEE_TIME_hf )
+BOOST_AUTO_TEST_CASE( create_uia_dmf_flag_not_available_before_HARDFORK_DYNAMIC_FEE_TIME_hf_test )
+{
+   try {
+      asset_create_operation creator = std::move(get_create_operation());
+      creator.common_options.flags = charge_dynamic_market_fee;
+      trx.operations.push_back(std::move(creator));
+
+      GRAPHENE_REQUIRE_THROW(PUSH_TX( db, trx, ~0 ), fc::exception);
+
+} FC_LOG_AND_RETHROW() }
+
+BOOST_AUTO_TEST_CASE( not_allowed_to_create_uia_dmf_before_HARDFORK_DYNAMIC_FEE_TIME_hf_test )
+{
+   try {
+      dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {2, 30}}, .taker_fee = {{0,10}, {20, 30}}};
+      additional_asset_options options = {.dynamic_fees = fee_table};
+
+      asset_create_operation creator = std::move(get_create_operation());
+      creator.common_options.flags = charge_dynamic_market_fee;
+      creator.common_options.extensions.value = options;
+      trx.operations.push_back(std::move(creator));
+
+      GRAPHENE_REQUIRE_THROW(PUSH_TX( db, trx, ~0 ), fc::exception);
+} FC_LOG_AND_RETHROW() }
+
+BOOST_AUTO_TEST_CASE( not_allowed_to_create_uia_dmf_without_fee_table_after_HARDFORK_DYNAMIC_FEE_TIME_hf_test )
 {
    try {
       generate_blocks(HARDFORK_DYNAMIC_FEE_TIME);
@@ -199,38 +221,13 @@ BOOST_AUTO_TEST_CASE( create_uia_dmf_flag_not_available_before_HARDFORK_DYNAMIC_
 
 } FC_LOG_AND_RETHROW() }
 
-BOOST_AUTO_TEST_CASE( not_allowed_to_create_uia_dmf_before_HARDFORK_DYNAMIC_FEE_TIME_hf )
-{
-   try {
-      dynamic_fee_table fee_table = {.maker_fee = {{1,10}, {2, 30}}, .taker_fee = {{10,10}, {20, 30}}};
-      additional_asset_options options = {.dynamic_fees = fee_table};
-
-      asset_create_operation creator = std::move(get_create_operation());
-      creator.common_options.flags = charge_dynamic_market_fee;
-      creator.common_options.extensions.value = options;
-      trx.operations.push_back(std::move(creator));
-
-      GRAPHENE_REQUIRE_THROW(PUSH_TX( db, trx, ~0 ), fc::exception);
-} FC_LOG_AND_RETHROW() }
-
-BOOST_AUTO_TEST_CASE( not_allowed_to_create_uia_dmf_without_fee_table_after_HARDFORK_DYNAMIC_FEE_TIME_hf )
+BOOST_AUTO_TEST_CASE( not_allowed_to_create_uia_dmf_without_flag_after_HARDFORK_DYNAMIC_FEE_TIME_hf_test )
 {
    try {
       generate_blocks(HARDFORK_DYNAMIC_FEE_TIME);
       set_expiration( db, trx );
 
-      asset_create_operation creator = std::move(get_create_operation());
-      creator.common_options.flags = charge_dynamic_market_fee;
-      trx.operations.push_back(std::move(creator));
-
-      GRAPHENE_REQUIRE_THROW(PUSH_TX( db, trx, ~0 ), fc::exception);
-
-} FC_LOG_AND_RETHROW() }
-
-BOOST_AUTO_TEST_CASE( not_allowed_to_create_uia_dmf_without_flag_after_HARDFORK_DYNAMIC_FEE_TIME_hf )
-{
-   try {
-      dynamic_fee_table fee_table = {.maker_fee = {{1,10}, {2, 30}}, .taker_fee = {{10,10}, {20, 30}}};
+      dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {2, 30}}, .taker_fee = {{0,10}, {20, 30}}};
       additional_asset_options options = {.dynamic_fees = fee_table};
 
       asset_create_operation creator = std::move(get_create_operation());
@@ -240,13 +237,13 @@ BOOST_AUTO_TEST_CASE( not_allowed_to_create_uia_dmf_without_flag_after_HARDFORK_
       GRAPHENE_REQUIRE_THROW(PUSH_TX( db, trx, ~0 ), fc::exception);
 } FC_LOG_AND_RETHROW() }
 
-BOOST_AUTO_TEST_CASE( create_uia_dmf_after_HARDFORK_DYNAMIC_FEE_TIME_hf )
+BOOST_AUTO_TEST_CASE( create_uia_dmf_after_HARDFORK_DYNAMIC_FEE_TIME_hf_test )
 {
    try {
       generate_blocks(HARDFORK_DYNAMIC_FEE_TIME);
       set_expiration( db, trx );
 
-      dynamic_fee_table fee_table = {.maker_fee = {{1,10}, {2, 30}}, .taker_fee = {{10,10}, {20, 30}}};
+      dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {2, 30}}, .taker_fee = {{0,10}, {20, 30}}};
       additional_asset_options options = {.dynamic_fees = fee_table};
 
       asset_id_type test_asset_id = db.get_index<asset_object>().get_next_id();
@@ -264,12 +261,12 @@ BOOST_AUTO_TEST_CASE( create_uia_dmf_after_HARDFORK_DYNAMIC_FEE_TIME_hf )
 
 } FC_LOG_AND_RETHROW() }
 
-BOOST_AUTO_TEST_CASE( not_allowed_update_uia_dmf_without_flag_before_HARDFORK_DYNAMIC_FEE_TIME_hf )
+BOOST_AUTO_TEST_CASE( not_allowed_update_uia_dmf_without_flag_before_HARDFORK_DYNAMIC_FEE_TIME_hf_test )
 {
    try {
       create_uia();
 
-      dynamic_fee_table fee_table = {.maker_fee = {{1,10}, {2, 30}}, .taker_fee = {{10,10}, {20, 30}}};
+      dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {2, 30}}, .taker_fee = {{0,10}, {20, 30}}};
       additional_asset_options options = {.dynamic_fees = fee_table};
 
       const auto& uia = get_asset(UIA_TEST_SYMBOL);
@@ -286,12 +283,12 @@ BOOST_AUTO_TEST_CASE( not_allowed_update_uia_dmf_without_flag_before_HARDFORK_DY
 
 } FC_LOG_AND_RETHROW() }
 
-BOOST_AUTO_TEST_CASE( not_allowed_update_uia_dmf_without_fee_table_before_HARDFORK_DYNAMIC_FEE_TIME_hf )
+BOOST_AUTO_TEST_CASE( not_allowed_update_uia_dmf_without_fee_table_before_HARDFORK_DYNAMIC_FEE_TIME_hf_test )
 {
    try {
       create_uia();
 
-      dynamic_fee_table fee_table = {.maker_fee = {{1,10}, {2, 30}}, .taker_fee = {{10,10}, {20, 30}}};
+      dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {2, 30}}, .taker_fee = {{0,10}, {20, 30}}};
       additional_asset_options options = {.dynamic_fees = fee_table};
 
       const auto& uia = get_asset(UIA_TEST_SYMBOL);
@@ -309,7 +306,7 @@ BOOST_AUTO_TEST_CASE( not_allowed_update_uia_dmf_without_fee_table_before_HARDFO
 
 } FC_LOG_AND_RETHROW() }
 
-BOOST_AUTO_TEST_CASE( not_allowed_update_uia_dmf_before_HARDFORK_DYNAMIC_FEE_TIME_hf )
+BOOST_AUTO_TEST_CASE( not_allowed_update_uia_dmf_before_HARDFORK_DYNAMIC_FEE_TIME_hf_test )
 {
    try {
       create_uia();
@@ -329,7 +326,7 @@ BOOST_AUTO_TEST_CASE( not_allowed_update_uia_dmf_before_HARDFORK_DYNAMIC_FEE_TIM
 } FC_LOG_AND_RETHROW() }
 
 
-BOOST_AUTO_TEST_CASE( not_allowed_update_uia_dmf_without_flag_after_HARDFORK_DYNAMIC_FEE_TIME_hf )
+BOOST_AUTO_TEST_CASE( not_allowed_update_uia_dmf_without_flag_after_HARDFORK_DYNAMIC_FEE_TIME_hf_test )
 {
    try {
       generate_blocks(HARDFORK_DYNAMIC_FEE_TIME);
@@ -337,7 +334,7 @@ BOOST_AUTO_TEST_CASE( not_allowed_update_uia_dmf_without_flag_after_HARDFORK_DYN
 
       create_uia();
 
-      dynamic_fee_table fee_table = {.maker_fee = {{1,10}, {2, 30}}, .taker_fee = {{10,10}, {20, 30}}};
+      dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {2, 30}}, .taker_fee = {{0,10}, {20, 30}}};
       additional_asset_options options = {.dynamic_fees = fee_table};
 
       const auto& uia = get_asset(UIA_TEST_SYMBOL);
@@ -354,7 +351,7 @@ BOOST_AUTO_TEST_CASE( not_allowed_update_uia_dmf_without_flag_after_HARDFORK_DYN
 
 } FC_LOG_AND_RETHROW() }
 
-BOOST_AUTO_TEST_CASE( not_allowed_update_uia_dmf_without_fee_table_after_HARDFORK_DYNAMIC_FEE_TIME_hf )
+BOOST_AUTO_TEST_CASE( not_allowed_update_uia_dmf_without_fee_table_after_HARDFORK_DYNAMIC_FEE_TIME_hf_test )
 {
    try {
       generate_blocks(HARDFORK_DYNAMIC_FEE_TIME);
@@ -376,7 +373,7 @@ BOOST_AUTO_TEST_CASE( not_allowed_update_uia_dmf_without_fee_table_after_HARDFOR
 
 } FC_LOG_AND_RETHROW() }
 
-BOOST_AUTO_TEST_CASE( update_uia_dmf_after_HARDFORK_DYNAMIC_FEE_TIME_hf )
+BOOST_AUTO_TEST_CASE( update_uia_dmf_after_HARDFORK_DYNAMIC_FEE_TIME_hf_test )
 {
    try {
       generate_blocks(HARDFORK_DYNAMIC_FEE_TIME);
@@ -384,7 +381,7 @@ BOOST_AUTO_TEST_CASE( update_uia_dmf_after_HARDFORK_DYNAMIC_FEE_TIME_hf )
 
       create_uia();
 
-      dynamic_fee_table fee_table = {.maker_fee = {{1,10}, {2, 30}}, .taker_fee = {{10,10}, {20, 30}}};
+      dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {2, 30}}, .taker_fee = {{0,10}, {20, 30}}};
       additional_asset_options options = {.dynamic_fees = fee_table};
       {
          const auto& uia = get_asset(UIA_TEST_SYMBOL);
@@ -405,6 +402,357 @@ BOOST_AUTO_TEST_CASE( update_uia_dmf_after_HARDFORK_DYNAMIC_FEE_TIME_hf )
       BOOST_CHECK((uia.options.flags & charge_dynamic_market_fee) == charge_dynamic_market_fee);
       BOOST_CHECK(uia.options.extensions.value.dynamic_fees->maker_fee == fee_table.maker_fee);
       BOOST_CHECK(uia.options.extensions.value.dynamic_fees->taker_fee == fee_table.taker_fee);
+
+} FC_LOG_AND_RETHROW() }
+
+BOOST_AUTO_TEST_CASE( create_uia_dmf_with_maker_non_zero_amount_test )
+{
+   try {
+      generate_blocks(HARDFORK_DYNAMIC_FEE_TIME);
+      set_expiration( db, trx );
+
+      dynamic_fee_table fee_table = {.maker_fee = {{10,10}, {2, 30}}, .taker_fee = {{0,10}, {20, 30}}};
+      additional_asset_options options = {.dynamic_fees = fee_table};
+
+      asset_create_operation creator = std::move(get_create_operation());
+      creator.common_options.flags = charge_dynamic_market_fee;
+      creator.common_options.extensions.value = options;
+      trx.operations.push_back(std::move(creator));
+      GRAPHENE_REQUIRE_THROW(PUSH_TX( db, trx, ~0 ), fc::exception);
+
+} FC_LOG_AND_RETHROW() }
+
+BOOST_AUTO_TEST_CASE( create_uia_dmf_with_taker_non_zero_amount_test )
+{
+   try {
+      generate_blocks(HARDFORK_DYNAMIC_FEE_TIME);
+      set_expiration( db, trx );
+
+      dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {2, 30}}, .taker_fee = {{1,10}, {20, 30}}};
+      additional_asset_options options = {.dynamic_fees = fee_table};
+
+      asset_create_operation creator = std::move(get_create_operation());
+      creator.common_options.flags = charge_dynamic_market_fee;
+      creator.common_options.extensions.value = options;
+      trx.operations.push_back(std::move(creator));
+      GRAPHENE_REQUIRE_THROW(PUSH_TX( db, trx, ~0 ), fc::exception);
+
+} FC_LOG_AND_RETHROW() }
+
+BOOST_AUTO_TEST_CASE( update_uia_dmf_with_taker_non_zero_amount_test )
+{
+   try {
+      generate_blocks(HARDFORK_DYNAMIC_FEE_TIME);
+      set_expiration( db, trx );
+
+      create_uia();
+
+      dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {2, 30}}, .taker_fee = {{1,10}, {20, 30}}};
+      additional_asset_options options = {.dynamic_fees = fee_table};
+      const auto& uia = get_asset(UIA_TEST_SYMBOL);
+
+      asset_update_operation op;
+      op.issuer = uia.issuer;
+      op.asset_to_update = uia.id;
+      op.new_options = uia.options;
+      op.new_options.flags = op.new_options.flags | charge_dynamic_market_fee;
+      op.new_options.extensions.value = options;
+      trx.operations.clear();
+      trx.operations.push_back(op);
+      GRAPHENE_REQUIRE_THROW(PUSH_TX( db, trx, ~0 ), fc::exception);
+
+} FC_LOG_AND_RETHROW() }
+
+BOOST_AUTO_TEST_CASE( update_uia_dmf_with_maker_non_zero_amount_test )
+{
+   try {
+      generate_blocks(HARDFORK_DYNAMIC_FEE_TIME);
+      set_expiration( db, trx );
+
+      create_uia();
+
+      dynamic_fee_table fee_table = {.maker_fee = {{1,10}, {2, 30}}, .taker_fee = {{0,10}, {20, 30}}};
+      additional_asset_options options = {.dynamic_fees = fee_table};
+      const auto& uia = get_asset(UIA_TEST_SYMBOL);
+
+      asset_update_operation op;
+      op.issuer = uia.issuer;
+      op.asset_to_update = uia.id;
+      op.new_options = uia.options;
+      op.new_options.flags = op.new_options.flags | charge_dynamic_market_fee;
+      op.new_options.extensions.value = options;
+      trx.operations.clear();
+      trx.operations.push_back(op);
+      GRAPHENE_REQUIRE_THROW(PUSH_TX( db, trx, ~0 ), fc::exception);
+
+} FC_LOG_AND_RETHROW() }
+
+
+BOOST_AUTO_TEST_CASE( create_uia_dmf_with_empty_maker_table_test )
+{
+   try {
+      generate_blocks(HARDFORK_DYNAMIC_FEE_TIME);
+      set_expiration( db, trx );
+
+      dynamic_fee_table fee_table;
+      fee_table.maker_fee = {};
+      fee_table.taker_fee = {{0,10}};
+      additional_asset_options options = {.dynamic_fees = fee_table};
+
+      asset_create_operation creator = std::move(get_create_operation());
+      creator.common_options.flags = charge_dynamic_market_fee;
+      creator.common_options.extensions.value = options;
+      trx.operations.push_back(std::move(creator));
+
+      GRAPHENE_REQUIRE_THROW(PUSH_TX( db, trx, ~0 ), fc::exception);
+
+} FC_LOG_AND_RETHROW() }
+
+BOOST_AUTO_TEST_CASE( create_uia_dmf_with_empty_taker_table_test )
+{
+   try {
+      generate_blocks(HARDFORK_DYNAMIC_FEE_TIME);
+      set_expiration( db, trx );
+
+      dynamic_fee_table fee_table;
+      fee_table.maker_fee = {{0,10}};
+      fee_table.taker_fee = {};
+      additional_asset_options options = {.dynamic_fees = fee_table};
+
+      asset_create_operation creator = std::move(get_create_operation());
+      creator.common_options.flags = charge_dynamic_market_fee;
+      creator.common_options.extensions.value = options;
+      trx.operations.push_back(std::move(creator));
+
+      GRAPHENE_REQUIRE_THROW(PUSH_TX( db, trx, ~0 ), fc::exception);
+
+} FC_LOG_AND_RETHROW() }
+
+BOOST_AUTO_TEST_CASE( update_uia_dmf_with_empty_maker_table_test )
+{
+   try {
+      generate_blocks(HARDFORK_DYNAMIC_FEE_TIME);
+      set_expiration( db, trx );
+
+      create_uia();
+
+      dynamic_fee_table fee_table;
+      fee_table.maker_fee = {};
+      fee_table.taker_fee = {{1,10}, {2, 30}};
+      additional_asset_options options = {.dynamic_fees = fee_table};
+      const auto& uia = get_asset(UIA_TEST_SYMBOL);
+
+      asset_update_operation op;
+      op.issuer = uia.issuer;
+      op.asset_to_update = uia.id;
+      op.new_options = uia.options;
+      op.new_options.flags = op.new_options.flags | charge_dynamic_market_fee;
+      op.new_options.extensions.value = options;
+      trx.operations.clear();
+      trx.operations.push_back(op);
+      GRAPHENE_REQUIRE_THROW(PUSH_TX( db, trx, ~0 ), fc::exception);
+
+} FC_LOG_AND_RETHROW() }
+
+BOOST_AUTO_TEST_CASE( update_uia_dmf_with_empty_taker_table_test )
+{
+   try {
+      generate_blocks(HARDFORK_DYNAMIC_FEE_TIME);
+      set_expiration( db, trx );
+
+      create_uia();
+
+      dynamic_fee_table fee_table;
+      fee_table.maker_fee = {{1,10}, {2, 30}};
+      fee_table.taker_fee = {};
+      additional_asset_options options = {.dynamic_fees = fee_table};
+      const auto& uia = get_asset(UIA_TEST_SYMBOL);
+
+      asset_update_operation op;
+      op.issuer = uia.issuer;
+      op.asset_to_update = uia.id;
+      op.new_options = uia.options;
+      op.new_options.flags = op.new_options.flags | charge_dynamic_market_fee;
+      op.new_options.extensions.value = options;
+      trx.operations.clear();
+      trx.operations.push_back(op);
+      GRAPHENE_REQUIRE_THROW(PUSH_TX( db, trx, ~0 ), fc::exception);
+
+} FC_LOG_AND_RETHROW() }
+
+BOOST_AUTO_TEST_CASE( create_uia_dmf_with_incorrect_taker_percent_test )
+{
+   try {
+      generate_blocks(HARDFORK_DYNAMIC_FEE_TIME);
+      set_expiration( db, trx );
+
+      dynamic_fee_table fee_table;
+      fee_table.maker_fee = {{0,10}};
+      fee_table.taker_fee = {{0,10001}};
+      additional_asset_options options = {.dynamic_fees = fee_table};
+
+      asset_create_operation creator = std::move(get_create_operation());
+      creator.common_options.flags = charge_dynamic_market_fee;
+      creator.common_options.extensions.value = options;
+      trx.operations.push_back(std::move(creator));
+
+      GRAPHENE_REQUIRE_THROW(PUSH_TX( db, trx, ~0 ), fc::exception);
+
+} FC_LOG_AND_RETHROW() }
+
+BOOST_AUTO_TEST_CASE( update_uia_dmf_with_incorrect_taker_percent_test )
+{
+   try {
+      generate_blocks(HARDFORK_DYNAMIC_FEE_TIME);
+      set_expiration( db, trx );
+
+      create_uia();
+
+      dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {2, 30}}, .taker_fee = {{0,10}, {20, 10001}}};
+      additional_asset_options options = {.dynamic_fees = fee_table};
+      const auto& uia = get_asset(UIA_TEST_SYMBOL);
+
+      asset_update_operation op;
+      op.issuer = uia.issuer;
+      op.asset_to_update = uia.id;
+      op.new_options = uia.options;
+      op.new_options.flags = op.new_options.flags | charge_dynamic_market_fee;
+      op.new_options.extensions.value = options;
+      trx.operations.clear();
+      trx.operations.push_back(op);
+      GRAPHENE_REQUIRE_THROW(PUSH_TX( db, trx, ~0 ), fc::exception);
+
+} FC_LOG_AND_RETHROW() }
+
+BOOST_AUTO_TEST_CASE( create_uia_dmf_with_incorrect_taker_amount_test )
+{
+   try {
+      generate_blocks(HARDFORK_DYNAMIC_FEE_TIME);
+      set_expiration( db, trx );
+
+      dynamic_fee_table fee_table;
+      fee_table.maker_fee = {{0,10}};
+      fee_table.taker_fee = {{-10,10000}};
+      additional_asset_options options = {.dynamic_fees = fee_table};
+
+      asset_create_operation creator = std::move(get_create_operation());
+      creator.common_options.flags = charge_dynamic_market_fee;
+      creator.common_options.extensions.value = options;
+      trx.operations.push_back(std::move(creator));
+
+      GRAPHENE_REQUIRE_THROW(PUSH_TX( db, trx, ~0 ), fc::exception);
+
+} FC_LOG_AND_RETHROW() }
+
+BOOST_AUTO_TEST_CASE( update_uia_dmf_with_incorrect_taker_amount_test )
+{
+   try {
+      generate_blocks(HARDFORK_DYNAMIC_FEE_TIME);
+      set_expiration( db, trx );
+
+      create_uia();
+
+      dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {2, 30}}, .taker_fee = {{0,10}, {-20, 100}}};
+      additional_asset_options options = {.dynamic_fees = fee_table};
+      const auto& uia = get_asset(UIA_TEST_SYMBOL);
+
+      asset_update_operation op;
+      op.issuer = uia.issuer;
+      op.asset_to_update = uia.id;
+      op.new_options = uia.options;
+      op.new_options.flags = op.new_options.flags | charge_dynamic_market_fee;
+      op.new_options.extensions.value = options;
+      trx.operations.clear();
+      trx.operations.push_back(op);
+      GRAPHENE_REQUIRE_THROW(PUSH_TX( db, trx, ~0 ), fc::exception);
+
+} FC_LOG_AND_RETHROW() }
+
+BOOST_AUTO_TEST_CASE( create_uia_dmf_with_incorrect_maker_percent_test )
+{
+   try {
+      generate_blocks(HARDFORK_DYNAMIC_FEE_TIME);
+      set_expiration( db, trx );
+
+      dynamic_fee_table fee_table;
+      fee_table.maker_fee = {{0,10002}};
+      fee_table.taker_fee = {{0,10}};
+      additional_asset_options options = {.dynamic_fees = fee_table};
+
+      asset_create_operation creator = std::move(get_create_operation());
+      creator.common_options.flags = charge_dynamic_market_fee;
+      creator.common_options.extensions.value = options;
+      trx.operations.push_back(std::move(creator));
+
+      GRAPHENE_REQUIRE_THROW(PUSH_TX( db, trx, ~0 ), fc::exception);
+
+} FC_LOG_AND_RETHROW() }
+
+BOOST_AUTO_TEST_CASE( update_uia_dmf_with_incorrect_maker_percent_test )
+{
+   try {
+      generate_blocks(HARDFORK_DYNAMIC_FEE_TIME);
+      set_expiration( db, trx );
+
+      create_uia();
+
+      dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {2, 10002}}, .taker_fee = {{0,10}, {20, 100}}};
+      additional_asset_options options = {.dynamic_fees = fee_table};
+      const auto& uia = get_asset(UIA_TEST_SYMBOL);
+
+      asset_update_operation op;
+      op.issuer = uia.issuer;
+      op.asset_to_update = uia.id;
+      op.new_options = uia.options;
+      op.new_options.flags = op.new_options.flags | charge_dynamic_market_fee;
+      op.new_options.extensions.value = options;
+      trx.operations.clear();
+      trx.operations.push_back(op);
+      GRAPHENE_REQUIRE_THROW(PUSH_TX( db, trx, ~0 ), fc::exception);
+
+} FC_LOG_AND_RETHROW() }
+
+BOOST_AUTO_TEST_CASE( create_uia_dmf_with_incorrect_maker_amount_test )
+{
+   try {
+      generate_blocks(HARDFORK_DYNAMIC_FEE_TIME);
+      set_expiration( db, trx );
+
+      dynamic_fee_table fee_table;
+      fee_table.maker_fee = {{-1,10000}};
+      fee_table.taker_fee = {{0,10}};
+      additional_asset_options options = {.dynamic_fees = fee_table};
+
+      asset_create_operation creator = std::move(get_create_operation());
+      creator.common_options.flags = charge_dynamic_market_fee;
+      creator.common_options.extensions.value = options;
+      trx.operations.push_back(std::move(creator));
+
+      GRAPHENE_REQUIRE_THROW(PUSH_TX( db, trx, ~0 ), fc::exception);
+
+} FC_LOG_AND_RETHROW() }
+
+BOOST_AUTO_TEST_CASE( update_uia_dmf_with_incorrect_maker_amount_test )
+{
+   try {
+      generate_blocks(HARDFORK_DYNAMIC_FEE_TIME);
+      set_expiration( db, trx );
+
+      create_uia();
+
+      dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {-2, 10}}, .taker_fee = {{0,10}, {20, 100}}};
+      additional_asset_options options = {.dynamic_fees = fee_table};
+      const auto& uia = get_asset(UIA_TEST_SYMBOL);
+
+      asset_update_operation op;
+      op.issuer = uia.issuer;
+      op.asset_to_update = uia.id;
+      op.new_options = uia.options;
+      op.new_options.flags = op.new_options.flags | charge_dynamic_market_fee;
+      op.new_options.extensions.value = options;
+      trx.operations.clear();
+      trx.operations.push_back(op);
+      GRAPHENE_REQUIRE_THROW(PUSH_TX( db, trx, ~0 ), fc::exception);
 
 } FC_LOG_AND_RETHROW() }
 

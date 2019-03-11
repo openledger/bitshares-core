@@ -70,6 +70,41 @@ namespace detail {
              ( !(is_charge_dynamic_market_fee_set || is_dynamic_fee_table_set) ),
              "Dynamic market fee table and charge_dynamic_market_fee should be used in together"
          );
+
+         if(is_charge_dynamic_market_fee_set)
+         {
+            const auto& taker = options.extensions.value.dynamic_fees->taker_fee;
+            const auto& maker = options.extensions.value.dynamic_fees->maker_fee;
+
+            //check non empty table
+            FC_ASSERT ( !(taker.empty() || maker.empty()),
+               "Dynamic market fee (maker or taker) table should be non empty"
+            );
+            //check zero amount for taker table
+            FC_ASSERT( (taker.find(dynamic_fee_table::dynamic_fee {0, 0}) != taker.end()),
+               "Dynamic market fee taker amount should start from zero"
+            );
+            //check zero amount for maker table
+            FC_ASSERT( (maker.find(dynamic_fee_table::dynamic_fee {0, 0}) != maker.end()),
+               "Dynamic market fee maker amount should start from zero"
+            );
+
+            for( const auto& it : taker ){
+               //amount must be not negative
+               FC_ASSERT( (it.amount >= 0), "Taker amount should be not negative");
+               //fee percent: range [0...GRAPHENE_100_PERCENT]
+               FC_ASSERT( (it.percent >= 0 && it.percent <= GRAPHENE_100_PERCENT),
+                  "Taker percent should be in range [0 - 10000]");
+            }
+
+            for( const auto& it : maker ){
+               //amount must be not negative
+               FC_ASSERT( (it.amount >= 0), "Maker amount should be not negative");
+               //fee percent: range [0...GRAPHENE_100_PERCENT]
+               FC_ASSERT( (it.percent >= 0 && it.percent <= GRAPHENE_100_PERCENT),
+                  "Maker percent should be in range [0 - 10000]");
+            }
+         }
       }
    }
 }
