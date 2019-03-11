@@ -33,6 +33,7 @@ using namespace graphene::chain::detail;
 
 namespace graphene { namespace chain {namespace detail {
    const trade_statistics_object* get_trade_statistics(const database &db, const account_id_type& account_id, const asset_id_type &asset_id);
+   uint64_t calculate_percent(const share_type& value, uint16_t percent);
 }}}
 
 namespace fc
@@ -77,7 +78,8 @@ struct dmf_performance_fixture : database_fixture
 
       if (dynamic)
       {
-         dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {10000, 30}}, .taker_fee = {{0,10}, {20000, 45}}};
+         dynamic_fee_table fee_table = {.maker_fee = {{0,GRAPHENE_1_PERCENT}, {50000, 30}}, 
+                                        .taker_fee = {{0,GRAPHENE_1_PERCENT}, {50000, 45}}};
          options.value.dynamic_fees = fee_table;
          flags |= charge_dynamic_market_fee;
       }
@@ -98,6 +100,21 @@ struct dmf_performance_fixture : database_fixture
       {
          transfer(committee_account, account.get_id(), asset(1000000));
          transfer(from, account.get_id(), amount);
+      }
+   }
+
+   void initialize_trade_statistics(const asset_id_type& asset_id)
+   {
+      auto block_time = db.head_block_time();
+      
+      constexpr auto max_statistics_noise = 10000000UL;
+      for (uint64_t instance = 0; instance < max_statistics_noise; ++instance)
+      {
+         db.create<trade_statistics_object>([&instance, &asset_id, &block_time](trade_statistics_object &o) {
+            o.account_id = account_id_type(instance);
+            o.total_volume = asset(0, asset_id);
+            o.first_trade_date = block_time;
+         });
       }
    }
 
@@ -131,7 +148,7 @@ BOOST_AUTO_TEST_CASE(performance_before_HARDFORK_DYNAMIC_FEE_TIME_hf_test)
 
       generate_blocks(HARDFORK_DYNAMIC_FEE_TIME - 1000);
 
-      const auto ui_asset = create_and_issue_uia("UIASSET", issuer, iterations * accounts * uia_to_sell );
+      const auto ui_asset = create_and_issue_uia("UIASSET", issuer, iterations * accounts * uia_to_sell);
       const auto traders = create_accounts(accounts);
       transfer_uia(traders, issuer_id, ui_asset.amount(iterations * uia_to_sell));
 
@@ -144,6 +161,9 @@ BOOST_AUTO_TEST_CASE(performance_before_HARDFORK_DYNAMIC_FEE_TIME_hf_test)
 
       const auto elapsed = duration_cast<milliseconds>(end - start);
       wlog("performance_before_HARDFORK_DYNAMIC_FEE_TIME_hf_test took: ${c} ms", ("c", elapsed.count()));
+
+      const auto expected_fees = calculate_percent(accounts * uia_to_sell * iterations, 20 * GRAPHENE_1_PERCENT);
+      BOOST_REQUIRE_EQUAL(ui_asset.dynamic_asset_data_id(db).accumulated_fees, expected_fees);
 
       for (const auto& account : traders)
       {
@@ -169,6 +189,8 @@ BOOST_AUTO_TEST_CASE(performance_after_HARDFORK_DYNAMIC_FEE_TIME_hf_test)
       generate_blocks(HARDFORK_DYNAMIC_FEE_TIME);
 
       const auto ui_asset = create_and_issue_uia("UIASSET", issuer, iterations * accounts * uia_to_sell, true);
+      initialize_trade_statistics(ui_asset.get_id());
+
       const auto traders = create_accounts(accounts);
       transfer_uia(traders, issuer_id, ui_asset.amount(iterations * uia_to_sell));
 
@@ -182,10 +204,14 @@ BOOST_AUTO_TEST_CASE(performance_after_HARDFORK_DYNAMIC_FEE_TIME_hf_test)
       const auto elapsed = duration_cast<milliseconds>(end - start);
       wlog("performance_after_HARDFORK_DYNAMIC_FEE_TIME_hf_test took: ${c} ms", ("c", elapsed.count()));
 
+      const auto expected_volume_per_trader = (uia_to_sell * iterations);      
+      const auto expected_fees = calculate_percent(accounts * expected_volume_per_trader, GRAPHENE_1_PERCENT);
+      BOOST_REQUIRE_EQUAL(ui_asset.dynamic_asset_data_id(db).accumulated_fees, expected_fees);
+
       for (const auto& account : traders)
       {
-         const auto statistic = get_trade_statistics(db, account.get_id(), ui_asset.get_id());
-         BOOST_CHECK_GT(statistic->total_volume.amount, 0);
+         const auto statistic = get_trade_statistics(db, account.get_id(), ui_asset.get_id());         
+         BOOST_REQUIRE_EQUAL(statistic->total_volume.amount, expected_volume_per_trader);
       }
    }
    FC_LOG_AND_RETHROW()
