@@ -270,6 +270,42 @@ typedef generic_index<call_order_object, call_order_multi_index_type>           
 typedef generic_index<force_settlement_object, force_settlement_object_multi_index_type>   force_settlement_index;
 typedef generic_index<collateral_bid_object, collateral_bid_object_multi_index_type>       collateral_bid_index;
 
+   /**
+    * @brief This class accumulates statistics for trading
+   */
+   class trade_statistics_object : public graphene::db::abstract_object<trade_statistics_object>
+   {
+      public:
+         static const uint8_t space_id = implementation_ids;
+         static const uint8_t type_id  = impl_trade_statistics_object_type;
+
+         account_id_type      account_id;
+         fc::time_point_sec   first_trade_date;    //first trade date for this asset
+         asset                total_volume;        //total bought/sold assets volume
+         asset_id_type get_asset_id() const { return total_volume.asset_id; }
+   };
+
+   struct by_account_asset;
+   struct by_id;
+   /**
+    * @ingroup object_index
+    */
+   typedef multi_index_container<
+      trade_statistics_object,
+      indexed_by<
+         ordered_unique< tag< by_id >, member< object, object_id_type, &object::id > >,
+         ordered_unique< tag<by_account_asset>,
+            composite_key<
+               trade_statistics_object,
+               member< trade_statistics_object, account_id_type, &trade_statistics_object::account_id >,
+               const_mem_fun< trade_statistics_object, asset_id_type, &trade_statistics_object::get_asset_id >
+            >
+         >
+      >
+   > trade_statistics_multi_index_type;
+
+   typedef generic_index<trade_statistics_object, trade_statistics_multi_index_type> trade_statistics_index;
+
 } } // graphene::chain
 
 FC_REFLECT_DERIVED( graphene::chain::limit_order_object,
@@ -287,3 +323,8 @@ FC_REFLECT_DERIVED( graphene::chain::force_settlement_object,
 
 FC_REFLECT_DERIVED( graphene::chain::collateral_bid_object, (graphene::db::object),
                     (bidder)(inv_swan_price) )
+
+FC_REFLECT_DERIVED( graphene::chain::trade_statistics_object,
+                    (graphene::db::object),
+                    (account_id)(first_trade_date)(total_volume)
+                  )

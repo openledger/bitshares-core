@@ -44,6 +44,48 @@ namespace graphene { namespace chain { namespace detail {
 
 } //detail
 
+namespace detail {
+
+   const trade_statistics_object* get_trade_statistics(const database &db, const account_id_type& account_id, const asset_id_type &asset_id)
+   {
+      auto& trade_statistics = db.get_index_type<trade_statistics_index>().indices().get<by_account_asset>();
+      auto statistic_it = trade_statistics.find( boost::make_tuple(account_id, asset_id) );
+
+      if( statistic_it != trade_statistics.end() )
+      {
+         return &*statistic_it;
+      }
+      return nullptr;
+   }
+
+   void adjust_trade_statistics(database &db, const account_id_type& account_id, const asset& amount)
+   {
+      try {
+         if( amount.amount == 0 )
+            return;
+
+         FC_ASSERT( amount.amount > 0, "Asset amount should be positive");
+
+         auto trade_statistic = get_trade_statistics(db, account_id, amount.asset_id);
+         if( trade_statistic )
+         {
+            db.modify( *trade_statistic, [&amount]( trade_statistics_object& o)
+            {
+               o.total_volume += amount;
+            });
+         } else {
+            auto block_time = db.head_block_time();
+
+            db.create<trade_statistics_object>([&account_id, &amount, &block_time](trade_statistics_object &o) {
+               o.account_id = account_id;
+               o.total_volume = amount;
+               o.first_trade_date = block_time;
+            });
+         }
+      } FC_CAPTURE_AND_RETHROW( (account_id)(amount))
+   }
+}
+
 /**
  * All margin positions are force closed at the swan price
  * Collateral received goes into a force-settlement fund
@@ -835,6 +877,11 @@ bool database::fill_limit_order( const limit_order_object& order, const asset& p
 
    assert( pays.asset_id != receives.asset_id );
    push_applied_operation( fill_order_operation( order.id, order.seller, pays, receives, issuer_fees, fill_price, is_maker ) );
+
+   if ( head_block_time() >= HARDFORK_DYNAMIC_FEE_TIME )
+   {
+      detail::adjust_trade_statistics(*this, seller.id, asset{ receives.amount, receives.asset_id });
+   }
 
    // conditional because cheap integer comparison may allow us to avoid two expensive modify() and object lookups
    if( order.deferred_fee > 0 )

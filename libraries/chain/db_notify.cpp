@@ -434,7 +434,9 @@ void get_relevant_accounts( const object* obj, flat_set<account_id_type>& accoun
               FC_ASSERT( aobj != nullptr );
               accounts.insert( aobj->bidder );
               break;
-           }
+            }
+             case impl_trade_statistics_object_type:
+              break;
       }
    }
 } // end get_relevant_accounts( const object* obj, flat_set<account_id_type>& accounts )
