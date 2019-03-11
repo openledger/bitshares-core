@@ -50,10 +50,35 @@ namespace detail {
    }
 }
 
+namespace detail {
+   void check_dynamic_market_fee_hf(const database& db, const asset_options& options)
+   {
+      const bool is_charge_dynamic_market_fee_set = ( (options.flags & charge_dynamic_market_fee) == charge_dynamic_market_fee );
+      const bool is_dynamic_fee_table_set = options.extensions.value.dynamic_fees.valid();
+
+      if( db.head_block_time() < HARDFORK_DYNAMIC_FEE_TIME )
+      {
+         FC_ASSERT( !is_dynamic_fee_table_set,
+            "Dynamic market fee functionality is available after HARDFORK_DYNAMIC_FEE_TIME" );
+
+         FC_ASSERT( !is_charge_dynamic_market_fee_set,
+            "charge_dynamic_market_fee flag is available after HARDFORK_DYNAMIC_FEE_TIME" );
+      }
+      else
+      {
+         FC_ASSERT( ( is_charge_dynamic_market_fee_set && is_dynamic_fee_table_set ) ||
+             ( !(is_charge_dynamic_market_fee_set || is_dynamic_fee_table_set) ),
+             "Dynamic market fee table and charge_dynamic_market_fee should be used in together"
+         );
+      }
+   }
+}
+
 void_result asset_create_evaluator::do_evaluate( const asset_create_operation& op )
 { try {
 
    database& d = db();
+   detail::check_dynamic_market_fee_hf(d, op.common_options);
 
    const auto& chain_parameters = d.get_global_properties().parameters;
    FC_ASSERT( op.common_options.whitelist_authorities.size() <= chain_parameters.maximum_asset_whitelist_authorities );
@@ -285,6 +310,8 @@ void_result asset_update_evaluator::do_evaluate(const asset_update_operation& o)
    auto a_copy = a;
    a_copy.options = o.new_options;
    a_copy.validate();
+
+   detail::check_dynamic_market_fee_hf(d, o.new_options);
 
    if( o.new_issuer )
    {

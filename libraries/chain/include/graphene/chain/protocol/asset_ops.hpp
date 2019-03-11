@@ -26,6 +26,29 @@
 #include <graphene/chain/protocol/memo.hpp>
 
 namespace graphene { namespace chain { 
+   /**
+    * @brief The dynamic_fee_table struct contains records for fee according to trading amount for asset
+    *
+    */
+   struct dynamic_fee_table {
+
+      struct dynamic_fee {
+         share_type amount;
+         uint16_t   percent;
+
+         bool operator < (const dynamic_fee& other) const
+         {
+            return amount < other.amount;
+         }
+      };
+
+      flat_set<dynamic_fee> maker_fee;
+      flat_set<dynamic_fee> taker_fee;
+   };
+   struct additional_asset_options
+   {
+      fc::optional<dynamic_fee_table> dynamic_fees;
+   };
 
    struct additional_asset_options
    {
@@ -513,6 +536,9 @@ namespace graphene { namespace chain {
 
 } } // graphene::chain
 
+FC_REFLECT( graphene::chain::additional_asset_options, (dynamic_fees) )
+FC_REFLECT( graphene::chain::dynamic_fee_table, (maker_fee)(taker_fee) )
+FC_REFLECT( graphene::chain::dynamic_fee_table::dynamic_fee, (amount)(percent) )
 FC_REFLECT( graphene::chain::asset_claim_fees_operation, (fee)(issuer)(amount_to_claim)(extensions) )
 FC_REFLECT( graphene::chain::asset_claim_fees_operation::fee_parameters_type, (fee) )
 FC_REFLECT( graphene::chain::asset_claim_pool_operation, (fee)(issuer)(asset_id)(amount_to_claim)(extensions) )

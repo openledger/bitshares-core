@@ -108,19 +108,21 @@ namespace graphene { namespace chain {
 
    enum asset_issuer_permission_flags
    {
-      charge_market_fee    = 0x01, /**< an issuer-specified percentage of all market trades in this asset is paid to the issuer */
-      white_list           = 0x02, /**< accounts must be whitelisted in order to hold this asset */
-      override_authority   = 0x04, /**< issuer may transfer asset back to himself */
-      transfer_restricted  = 0x08, /**< require the issuer to be one party to every transfer */
-      disable_force_settle = 0x10, /**< disable force settling */
-      global_settle        = 0x20, /**< allow the bitasset issuer to force a global settling -- this may be set in permissions, but not flags */
-      disable_confidential = 0x40, /**< allow the asset to be used with confidential transactions */
-      witness_fed_asset    = 0x80, /**< allow the asset to be fed by witnesses */
-      committee_fed_asset  = 0x100 /**< allow the asset to be fed by the committee */
+      charge_market_fee         = 0x01, /**< an issuer-specified percentage of all market trades in this asset is paid to the issuer */
+      white_list                = 0x02, /**< accounts must be whitelisted in order to hold this asset */
+      override_authority        = 0x04, /**< issuer may transfer asset back to himself */
+      transfer_restricted       = 0x08, /**< require the issuer to be one party to every transfer */
+      disable_force_settle      = 0x10, /**< disable force settling */
+      global_settle             = 0x20, /**< allow the bitasset issuer to force a global settling -- this may be set in permissions, but not flags */
+      disable_confidential      = 0x40, /**< allow the asset to be used with confidential transactions */
+      witness_fed_asset         = 0x80, /**< allow the asset to be fed by witnesses */
+      committee_fed_asset       = 0x100, /**< allow the asset to be fed by the committee */
+      charge_dynamic_market_fee = 0x200 /**< an issuer-specified dynamic percentage of all market trades in this asset is paid to the issuer */
    };
+
    const static uint32_t ASSET_ISSUER_PERMISSION_MASK = charge_market_fee|white_list|override_authority|transfer_restricted|disable_force_settle|global_settle|disable_confidential
-      |witness_fed_asset|committee_fed_asset;
-   const static uint32_t UIA_ASSET_ISSUER_PERMISSION_MASK = charge_market_fee|white_list|override_authority|transfer_restricted|disable_confidential;
+      |witness_fed_asset|committee_fed_asset|charge_dynamic_market_fee;
+   const static uint32_t UIA_ASSET_ISSUER_PERMISSION_MASK = charge_market_fee|white_list|override_authority|transfer_restricted|disable_confidential|charge_dynamic_market_fee ;
 
    enum reserved_spaces
    {
@@ -445,4 +447,5 @@ FC_REFLECT_ENUM( graphene::chain::asset_issuer_permission_flags,
    (disable_confidential)
    (witness_fed_asset)
    (committee_fed_asset)
+   (charge_dynamic_market_fee)
    )
