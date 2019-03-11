@@ -407,9 +407,17 @@ namespace graphene { namespace chain {
          // helpers to fill_order
          void pay_order( const account_object& receiver, const asset& receives, const asset& pays );
 
-         asset calculate_market_fee(const asset_object& recv_asset, const asset& trade_amount);
+         std::pair<uint16_t, uint16_t> get_dynamic_market_fee_percent( const account_id_type& fee_payer_id, 
+                                                                  const asset_object& trade_asset ) const;
+
+         asset calculate_market_fee( const asset_object& trade_asset, const asset& trade_amount );
+         asset calculate_market_fee( const account_object& fee_payer, const bool is_maker, 
+                                     const asset_object& trade_asset, const asset& trade_amount ) const;
+
          asset pay_market_fees( const asset_object& recv_asset, const asset& receives );
          asset pay_market_fees( const account_object& seller, const asset_object& recv_asset, const asset& receives );
+         asset pay_market_fees( const account_object& fee_payer, const bool is_maker, 
+                                const asset_object& trade_asset, const asset& trade_amount );
          ///@}
 
 

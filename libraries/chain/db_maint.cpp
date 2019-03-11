@@ -48,7 +48,7 @@
 namespace graphene { namespace chain {
 namespace detail {
 
-   constexpr int get_sliding_statistic_window_days()
+   int get_sliding_statistic_window_days()
    {
       return 30;
    }

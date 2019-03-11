@@ -1728,51 +1728,22 @@ vector<market_trade> database_api_impl::get_trade_history_by_sequence(
 }
 
 pair<uint16_t, uint16_t> database_api::get_dynamic_market_fee_percent(
-                                                      const account_id_type &buyer_id,
+                                                      const account_id_type &fee_payer_id,
                                                       const asset_id_type &asset_id ) const
 {
-   return my->get_dynamic_market_fee_percent( buyer_id, asset_id );
+   return my->get_dynamic_market_fee_percent( fee_payer_id, asset_id );
 }
 
 pair<uint16_t, uint16_t> database_api_impl::get_dynamic_market_fee_percent( 
-                                                         const account_id_type &buyer_id,
+                                                         const account_id_type &fee_payer_id,
                                                          const asset_id_type &asset_id ) const
 {
-   const auto &trade_stat_idx = _db.get_index_type<trade_statistics_index>().indices().get<by_account_asset>();
-   const auto statistics_it = trade_stat_idx.find( boost::make_tuple(buyer_id, asset_id) );
-   asset avg_volume;
-
-   if (statistics_it != trade_stat_idx.end())
-   {
-      avg_volume = statistics_it->total_volume;
-   }
-
-   pair<uint16_t, uint16_t> dynamic_fee_percents;
-
-   const auto &asset_obj = asset_id(_db);
-   const auto &options = asset_obj.options;
-   const bool is_charge_dynamic_market_fee_set((options.flags & charge_dynamic_market_fee) == charge_dynamic_market_fee);
-
-   // todo throw exception if flag not set
-   if (is_charge_dynamic_market_fee_set)
-   {
-      const auto &maker_fees = options.extensions.value.dynamic_fees->maker_fee;
-      const auto &maker_it = maker_fees.lower_bound(dynamic_fee_table::dynamic_fee{.amount = avg_volume.amount});
-
-      if (maker_it != maker_fees.end())
-      {
-         dynamic_fee_percents.first = maker_it->percent;
-      }
-
-      const auto &taker_fees = options.extensions.value.dynamic_fees->taker_fee;
-      const auto &taker_it = taker_fees.lower_bound(dynamic_fee_table::dynamic_fee{.amount = avg_volume.amount});
-      if (taker_it != taker_fees.end())
-      {
-         dynamic_fee_percents.second = taker_it->percent;
-      }
-   }
-
-   return dynamic_fee_percents;
+   const auto &trade_asset = asset_id(_db);
+   FC_ASSERT( trade_asset.charges_dynamic_market_fees(), 
+              "Dynamic market fees not configured for this asset, set charge_dynamic_market_fee flag." );
+              
+   const auto result = _db.get_dynamic_market_fee_percent(fee_payer_id, trade_asset);
+   return result;
 }
 
 //////////////////////////////////////////////////////////////////////

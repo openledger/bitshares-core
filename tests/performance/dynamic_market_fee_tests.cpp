@@ -69,13 +69,24 @@ struct dmf_performance_fixture : database_fixture
       return traders;
    }
 
-   asset_object create_and_issue_uia(const std::string& asset_name, const account_object& issuer, uint32_t count)
+   asset_object create_and_issue_uia(const std::string& asset_name, const account_object& issuer, 
+                                     uint32_t count, bool dynamic = false)
    {
       additional_asset_options options;
+      uint16_t flags = charge_market_fee;
 
-      const auto uia = create_user_issued_asset(asset_name, issuer, charge_market_fee,
-         price(asset(1, asset_id_type(1)), asset(1)),
-         1, 20 * GRAPHENE_1_PERCENT, options);
+      if (dynamic)
+      {
+         dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {10000, 30}}, .taker_fee = {{0,10}, {20000, 45}}};
+         options = {.dynamic_fees = fee_table};
+         flags |= charge_dynamic_market_fee;
+      }
+
+      const auto uia = create_user_issued_asset(
+                           asset_name, issuer, 
+                           flags,
+                           price(asset(1, asset_id_type(1)), asset(1)),
+                           1, 20 * GRAPHENE_1_PERCENT, options);
 
       issue_uia(issuer, uia.amount(count));
       return uia;
@@ -157,7 +168,7 @@ BOOST_AUTO_TEST_CASE(performance_after_HARDFORK_DYNAMIC_FEE_TIME_hf_test)
 
       generate_blocks(HARDFORK_DYNAMIC_FEE_TIME);
 
-      const auto ui_asset = create_and_issue_uia("UIASSET", issuer, iterations * accounts * uia_to_sell );
+      const auto ui_asset = create_and_issue_uia("UIASSET", issuer, iterations * accounts * uia_to_sell, true);
       const auto traders = create_accounts(accounts);
       transfer_uia(traders, issuer_id, ui_asset.amount(iterations * uia_to_sell));
 

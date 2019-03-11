@@ -547,11 +547,11 @@ class database_api
       /**
        * @brief Get dynamic market fee percent for specified account.
        *
-       * @param buyer_id The ID of the account whose dynamic fee percent should be retrieved
+       * @param fee_payer_id The ID of the account whose dynamic fee percent should be retrieved
        * @param asset_id ID of asset being purchased
        * @return The couple of maker's and taker's dynamic fee percent
        */
-      pair<uint16_t, uint16_t> get_dynamic_market_fee_percent( const account_id_type &buyer_id,
+      pair<uint16_t, uint16_t> get_dynamic_market_fee_percent( const account_id_type &fee_payer_id,
                                                                const asset_id_type &asset_id ) const;
 
 

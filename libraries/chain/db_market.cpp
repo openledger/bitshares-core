@@ -42,10 +42,6 @@ namespace graphene { namespace chain { namespace detail {
       return a.to_uint64();
    }
 
-} //detail
-
-namespace detail {
-
    const trade_statistics_object* get_trade_statistics(const database &db, const account_id_type& account_id, const asset_id_type &asset_id)
    {
       auto& trade_statistics = db.get_index_type<trade_statistics_index>().indices().get<by_account_asset>();
@@ -56,6 +52,18 @@ namespace detail {
          return &*statistic_it;
       }
       return nullptr;
+   }
+
+   asset get_trade_volume(const database &db, const account_id_type& account_id, const asset_id_type &asset_id)
+   {
+      const auto tso = get_trade_statistics(db, account_id, asset_id);
+
+      if( tso )
+      {
+         return tso->total_volume;
+      }
+
+      return {};
    }
 
    void adjust_trade_statistics(database &db, const account_id_type& account_id, const asset& amount)
@@ -84,7 +92,42 @@ namespace detail {
          }
       } FC_CAPTURE_AND_RETHROW( (account_id)(amount))
    }
-}
+
+   void accumulate_fees_to_be_paid(database &db, const asset_object& recv_asset, const asset& issuer_fees)
+   {
+      // Don't dirty undo state if not actually collecting any fees
+      if( issuer_fees.amount > 0 )
+      {
+         const auto& recv_dyn_data = recv_asset.dynamic_asset_data_id(db);
+
+         db.modify( recv_dyn_data, [&]( asset_dynamic_data_object& obj )
+         {
+            // idump((issuer_fees));
+            obj.accumulated_fees += issuer_fees.amount;
+         });
+      }
+   }
+
+   uint16_t find_dynamic_fee_percent_by_volume(const flat_set<dynamic_fee_table::dynamic_fee>& dynamic_fees, const asset& volume)
+   {
+      auto it = dynamic_fees.lower_bound(dynamic_fee_table::dynamic_fee{.amount = volume.amount});
+
+      if (it != dynamic_fees.end() && it->amount == volume.amount)
+      {
+         return it->percent;
+      }
+
+      it = std::prev(it);
+
+      if (it != dynamic_fees.end())
+      {
+         return it->percent;
+      }
+
+      return {};
+   }
+
+} //detail
 
 /**
  * All margin positions are force closed at the swan price
@@ -869,19 +912,26 @@ bool database::fill_limit_order( const limit_order_object& order, const asset& p
    const account_object& seller = order.seller(*this);
    const asset_object& recv_asset = receives.asset_id(*this);
 
+   bool after_hardfork_DYNAMIC_FEE = ( head_block_time() >= HARDFORK_DYNAMIC_FEE_TIME );
+
+   // TODO review and combine logic of two hardforks: 1268 and DYNAMIC
    auto issuer_fees = ( head_block_time() < HARDFORK_1268_TIME ) ? 
       pay_market_fees(recv_asset, receives) : 
-      pay_market_fees(seller, recv_asset, receives);
-
+      after_hardfork_DYNAMIC_FEE ? 
+         pay_market_fees(seller, is_maker, recv_asset, receives) :
+         pay_market_fees(seller, recv_asset, receives);
+      
    pay_order( seller, receives - issuer_fees, pays );
 
    assert( pays.asset_id != receives.asset_id );
    push_applied_operation( fill_order_operation( order.id, order.seller, pays, receives, issuer_fees, fill_price, is_maker ) );
 
-   if ( head_block_time() >= HARDFORK_DYNAMIC_FEE_TIME )
+   if( after_hardfork_DYNAMIC_FEE )
    {
-      if((recv_asset.options.flags & charge_dynamic_market_fee) == charge_dynamic_market_fee)
+      if( recv_asset.charges_dynamic_market_fees() )
+      {
          detail::adjust_trade_statistics(*this, seller.id, asset{ receives.amount, receives.asset_id });
+      }
    }
 
    // conditional because cheap integer comparison may allow us to avoid two expensive modify() and object lookups
@@ -1255,7 +1305,46 @@ asset database::calculate_market_fee( const asset_object& trade_asset, const ass
    asset percent_fee = trade_asset.amount(value);
 
    if( percent_fee.amount > trade_asset.options.max_market_fee )
+   {
       percent_fee.amount = trade_asset.options.max_market_fee;
+   }
+
+   return percent_fee;
+}
+
+asset database::calculate_market_fee(const account_object& fee_payer, const bool is_maker, 
+                                     const asset_object& trade_asset, const asset& trade_amount) const
+{
+   assert( trade_asset.id == trade_amount.asset_id );
+
+   uint16_t market_fee_percent = 0;
+
+   if( trade_asset.charges_dynamic_market_fees() )
+   {
+      asset volume = detail::get_trade_volume( *this, fee_payer.get_id(), trade_asset.get_id() );
+      const auto &fee_table = is_maker 
+                                 ? trade_asset.options.extensions.value.dynamic_fees->maker_fee 
+                                 : trade_asset.options.extensions.value.dynamic_fees->taker_fee;
+
+      market_fee_percent = detail::find_dynamic_fee_percent_by_volume(fee_table, volume);
+   }
+   else if( trade_asset.charges_market_fees() )
+   {
+      market_fee_percent = trade_asset.options.market_fee_percent;
+   }
+
+   if( market_fee_percent == 0 )
+   {
+      return trade_asset.amount(0);
+   }
+
+   auto value = detail::calculate_percent(trade_amount.amount, market_fee_percent);
+   asset percent_fee = trade_asset.amount(value.to_uint64());
+
+   if( percent_fee.amount > trade_asset.options.max_market_fee )
+   {
+      percent_fee.amount = trade_asset.options.max_market_fee;
+   }
 
    return percent_fee;
 }
@@ -1265,15 +1354,18 @@ asset database::pay_market_fees( const asset_object& recv_asset, const asset& re
    auto issuer_fees = calculate_market_fee( recv_asset, receives );
    FC_ASSERT( issuer_fees <= receives, "Market fee shouldn't be greater than receives");
 
-   //Don't dirty undo state if not actually collecting any fees
-   if( issuer_fees.amount > 0 )
-   {
-      const auto& recv_dyn_data = recv_asset.dynamic_asset_data_id(*this);
-      modify( recv_dyn_data, [&]( asset_dynamic_data_object& obj ){
-                   //idump((issuer_fees));
-         obj.accumulated_fees += issuer_fees.amount;
-      });
-   }
+   detail::accumulate_fees_to_be_paid( *this, recv_asset, issuer_fees );
+
+   return issuer_fees;
+}
+
+asset database::pay_market_fees(const account_object& fee_payer, const bool is_maker,
+                                const asset_object& trade_asset, const asset& trade_amount)
+{
+   auto issuer_fees = calculate_market_fee( fee_payer, is_maker, trade_asset, trade_amount );
+   FC_ASSERT( issuer_fees <= trade_amount, "Market fee shouldn't be greater than receives");
+
+   detail::accumulate_fees_to_be_paid( *this, trade_asset, issuer_fees );
 
    return issuer_fees;
 }
@@ -1327,6 +1419,19 @@ asset database::pay_market_fees(const account_object& seller, const asset_object
    }
 
    return issuer_fees;
+}
+
+std::pair<uint16_t, uint16_t> database::get_dynamic_market_fee_percent(const account_id_type& fee_payer_id, 
+                                                                  const asset_object& trade_asset) const
+{
+   assert( trade_asset.charges_dynamic_market_fees() );
+
+   asset volume = detail::get_trade_volume( *this, fee_payer_id, trade_asset.get_id() );
+
+   auto maker_pct = detail::find_dynamic_fee_percent_by_volume(trade_asset.options.extensions.value.dynamic_fees->maker_fee, volume);
+   auto taker_pct = detail::find_dynamic_fee_percent_by_volume(trade_asset.options.extensions.value.dynamic_fees->taker_fee, volume);
+
+   return {maker_pct, taker_pct};
 }
 
 } }

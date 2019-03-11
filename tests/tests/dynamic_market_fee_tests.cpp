@@ -857,4 +857,46 @@ BOOST_AUTO_TEST_CASE( sliding_windows_interval_test )
       check_statistics(alice_id, asset_id_type{2}, 56);
 } FC_LOG_AND_RETHROW() }
 
+BOOST_AUTO_TEST_CASE( apply_dynamic_fee_corresponding_trade_statistics )
+{
+   issue_asset();
+
+   GET_ACTOR(alice);
+   GET_ACTOR(bob);
+
+   generate_blocks(HARDFORK_DYNAMIC_FEE_TIME);
+   set_expiration( db, trx );
+
+   // setup dynamic fee table as follows {.maker_fee = {{0,10}, {10000, 30}}, .taker_fee = {{0,10}, {20000, 45}}};
+   update_uia_to_dynamic("JILLCOIN");
+
+   const asset_object &jillcoin = get_asset("JILLCOIN");
+   const asset_object &izzycoin = get_asset("IZZYCOIN");
+
+   {
+      const auto dyn_pcts = db.get_dynamic_market_fee_percent(alice_id, jillcoin);
+      const pair<uint16_t, uint16_t> expected = {10, 10};
+      // check for initial values, see: update_uia_to_dynamic()
+      BOOST_CHECK(dyn_pcts == expected);
+   }
+
+   // Alice and Bob place orders which match
+   create_sell_order( alice_id, izzycoin.amount(100), jillcoin.amount(1000) );
+   create_sell_order( bob_id, jillcoin.amount(1000), izzycoin.amount(100) );
+   {
+      const auto dyn_pcts = db.get_dynamic_market_fee_percent(alice_id, jillcoin);
+      const pair<uint16_t, uint16_t> expected = {10, 10};
+      BOOST_CHECK(dyn_pcts == expected);
+   }
+
+   // Alice and Bob place orders which match
+   create_sell_order( alice_id, izzycoin.amount(100), jillcoin.amount(19000) );
+   create_sell_order( bob_id, jillcoin.amount(19000), izzycoin.amount(100) );
+   {
+      const auto dyn_pcts = db.get_dynamic_market_fee_percent(alice_id, jillcoin);
+      const pair<uint16_t, uint16_t> expected = {30, 45};
+      BOOST_CHECK(dyn_pcts == expected);
+   }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
