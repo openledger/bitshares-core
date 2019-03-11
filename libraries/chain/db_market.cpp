@@ -880,7 +880,8 @@ bool database::fill_limit_order( const limit_order_object& order, const asset& p
 
    if ( head_block_time() >= HARDFORK_DYNAMIC_FEE_TIME )
    {
-      detail::adjust_trade_statistics(*this, seller.id, asset{ receives.amount, receives.asset_id });
+      if((recv_asset.options.flags & charge_dynamic_market_fee) == charge_dynamic_market_fee)
+         detail::adjust_trade_statistics(*this, seller.id, asset{ receives.amount, receives.asset_id });
    }
 
    // conditional because cheap integer comparison may allow us to avoid two expensive modify() and object lookups

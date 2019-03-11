@@ -532,7 +532,6 @@ const asset_object& database_fixture::create_user_issued_asset( const string& na
    creator.issuer = account_id_type();
    creator.fee = asset();
    creator.symbol = name;
-   creator.common_options.max_supply = 0;
    creator.precision = 2;
    creator.common_options.core_exchange_rate = price(asset(1,asset_id_type(1)),asset(1));
    creator.common_options.max_supply = GRAPHENE_MAX_SHARE_SUPPLY;
@@ -554,7 +553,6 @@ const asset_object& database_fixture::create_user_issued_asset( const string& na
    creator.issuer = issuer.id;
    creator.fee = asset();
    creator.symbol = name;
-   creator.common_options.max_supply = 0;
    creator.precision = precision;
    creator.common_options.core_exchange_rate = core_exchange_rate;
    creator.common_options.max_supply = GRAPHENE_MAX_SHARE_SUPPLY;

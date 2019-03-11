@@ -56,40 +56,67 @@ struct dynamic_market_fee_database_fixture : database_fixture
          fund( izzy, core_asset(1000000) );
          fund( jill, core_asset(1000000) );
 
-         price price(asset(1, asset_id_type(1)), asset(1));
-
-         asset_object izzycoin = create_user_issued_asset( "IZZYCOIN", izzy,  charge_market_fee, price, 2 );
-
-         asset_object jillcoin = create_user_issued_asset( "JILLCOIN", jill,  charge_market_fee, price, 2 );
+         create_uia( izzy_id, "IZZYCOIN" );
+         create_uia( jill_id, "JILLCOIN" );
 
          // Alice and Bob create some coins
-         issue_uia( alice, izzycoin.amount( 100000 ) );
-         issue_uia( bob, jillcoin.amount( 100000 ) );
+         issue_uia( alice, get_asset("IZZYCOIN").amount( 100000 ) );
+         issue_uia( bob, get_asset("JILLCOIN").amount( 100000 ) );
       }
       FC_LOG_AND_RETHROW()
    }
 
-   asset_create_operation get_create_operation() const
+   asset_create_operation get_create_operation(const account_id_type issuer = account_id_type(),
+                                               const string& name_asset = UIA_TEST_SYMBOL) const
    {
       asset_create_operation creator;
-      creator.issuer = account_id_type();
+      creator.issuer = issuer;
       creator.fee = asset();
-      creator.symbol = UIA_TEST_SYMBOL;
+      creator.symbol = name_asset;
       creator.common_options.max_supply = 100000000;
       creator.precision = 2;
       creator.common_options.market_fee_percent = GRAPHENE_MAX_MARKET_FEE_PERCENT/100; /*1%*/
       creator.common_options.issuer_permissions = UIA_ASSET_ISSUER_PERMISSION_MASK;
-      creator.common_options.core_exchange_rate = price(asset(2),asset(1,asset_id_type(1)));
+      creator.common_options.core_exchange_rate = price(asset(1),asset(1,asset_id_type(1)));
       creator.common_options.flags = charge_market_fee;
       return creator;
    }
 
-   void create_uia()
+   void create_uia(const account_id_type issuer = account_id_type(),
+                   const string& name_asset = UIA_TEST_SYMBOL)
    {
     try
       {
-         trx.operations.push_back(std::move(get_create_operation()));
+         trx.operations.push_back(std::move(get_create_operation(issuer, name_asset)));
          PUSH_TX( db, trx, ~0 );
+         trx.operations.clear();
+      }
+      FC_LOG_AND_RETHROW()
+   }
+
+   asset_update_operation get_update_operation(const string& name) const
+   {
+      dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {10000, 30}}, .taker_fee = {{0,10}, {20000, 45}}};
+      additional_asset_options options = {.dynamic_fees = fee_table};
+
+      const auto& uia = get_asset(name);
+
+      asset_update_operation op;
+      op.issuer = uia.issuer;
+      op.asset_to_update = uia.id;
+      op.new_options = uia.options;
+      op.new_options.extensions.value = options;
+      op.new_options.flags |= charge_dynamic_market_fee;
+      return op;
+   }
+
+   void update_uia_to_dynamic(const string& name)
+   {
+    try
+      {
+         trx.operations.push_back(std::move(get_update_operation(name)));
+         PUSH_TX( db, trx, ~0 );
+         trx.operations.clear();
       }
       FC_LOG_AND_RETHROW()
    }
@@ -97,12 +124,11 @@ struct dynamic_market_fee_database_fixture : database_fixture
 
 BOOST_FIXTURE_TEST_SUITE( dynamic_market_fee_tests, dynamic_market_fee_database_fixture )
 
-BOOST_AUTO_TEST_CASE( adjust_trade_statistics_test_before_HARDFORK_DYNAMIC_FEE_TIME_hf_test )
+BOOST_AUTO_TEST_CASE( adjust_trade_statistics_before_HARDFORK_DYNAMIC_FEE_TIME_hf_test )
 {
    try
    {
       issue_asset();
-      return;
       const asset_object &jillcoin = get_asset("JILLCOIN");
       const asset_object &izzycoin = get_asset("IZZYCOIN");
 
@@ -128,21 +154,23 @@ BOOST_AUTO_TEST_CASE( adjust_trade_statistics_test_before_HARDFORK_DYNAMIC_FEE_T
    } FC_LOG_AND_RETHROW()
 }
 
-BOOST_AUTO_TEST_CASE( adjust_trade_statistics_test_after_HARDFORK_DYNAMIC_FEE_TIME_hf_test )
+BOOST_AUTO_TEST_CASE( adjust_trade_statistics_after_HARDFORK_DYNAMIC_FEE_TIME_hf_test )
 {
    try
    {
       issue_asset();
 
-      generate_blocks(HARDFORK_DYNAMIC_FEE_TIME);
-
-      const asset_object &jillcoin = get_asset("JILLCOIN");
-      const asset_object &izzycoin = get_asset("IZZYCOIN");
-
       GET_ACTOR(alice);
       GET_ACTOR(bob);
 
+      generate_blocks(HARDFORK_DYNAMIC_FEE_TIME);
       set_expiration( db, trx );
+
+      update_uia_to_dynamic("JILLCOIN");
+      update_uia_to_dynamic("IZZYCOIN");
+
+      const asset_object &jillcoin = get_asset("JILLCOIN");
+      const asset_object &izzycoin = get_asset("IZZYCOIN");
 
       // Alice and Bob place orders which match
       create_sell_order( alice_id, izzycoin.amount(100), jillcoin.amount(300) );
@@ -164,6 +192,48 @@ BOOST_AUTO_TEST_CASE( adjust_trade_statistics_test_after_HARDFORK_DYNAMIC_FEE_TI
 
          const auto bob_izzycoin_tso = get_trade_statistics(db, bob_id, izzycoin.get_id());
          BOOST_CHECK_EQUAL(bob_izzycoin_tso->total_volume.amount, 200);
+      }
+   }
+   FC_LOG_AND_RETHROW()
+}
+
+BOOST_AUTO_TEST_CASE( adjust_trade_statistics_only_for_dynamic_asset_test )
+{
+   try
+   {
+      issue_asset();
+
+      GET_ACTOR(alice);
+      GET_ACTOR(bob);
+
+      generate_blocks(HARDFORK_DYNAMIC_FEE_TIME);
+      set_expiration( db, trx );
+
+      update_uia_to_dynamic("JILLCOIN");
+
+      const asset_object &jillcoin = get_asset("JILLCOIN");
+      const asset_object &izzycoin = get_asset("IZZYCOIN");
+
+      // Alice and Bob place orders which match
+      create_sell_order( alice_id, izzycoin.amount(100), jillcoin.amount(300) );
+      create_sell_order( bob_id, jillcoin.amount(300), izzycoin.amount(100) );
+      {
+         const auto alice_jillcoin_tso = get_trade_statistics(db, alice_id, jillcoin.get_id());
+         BOOST_CHECK_EQUAL(alice_jillcoin_tso->total_volume.amount, 300);
+
+         const auto bob_izzycoin_tso = get_trade_statistics(db, bob_id, izzycoin.get_id());
+         BOOST_CHECK(bob_izzycoin_tso == nullptr);
+      }
+      // Alice and Bob place orders which match
+      // trade_statistics should be updated
+      create_sell_order( alice_id, izzycoin.amount(100), jillcoin.amount(300) );
+      create_sell_order( bob_id, jillcoin.amount(300), izzycoin.amount(100) );
+      {
+         const auto alice_jillcoin_tso = get_trade_statistics(db, alice_id, jillcoin.get_id());
+         BOOST_CHECK_EQUAL(alice_jillcoin_tso->total_volume.amount, 600);
+
+         const auto bob_izzycoin_tso = get_trade_statistics(db, bob_id, izzycoin.get_id());
+         BOOST_CHECK(bob_izzycoin_tso == nullptr);
       }
    }
    FC_LOG_AND_RETHROW()
