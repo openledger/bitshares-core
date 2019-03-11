@@ -1,0 +1,4 @@
+// #DYNAMIC_FEE Pay dynamic market fee according to trade statistic
+#ifndef HARDFORK_DYNAMIC_FEE_TIME
+#define HARDFORK_DYNAMIC_FEE_TIME (fc::time_point_sec( 1548331200 )) //Thursday, January 24, 2019 12:00:00 PM
+#endif
