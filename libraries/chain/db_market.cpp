@@ -1444,4 +1444,17 @@ std::pair<uint16_t, uint16_t> database::get_dynamic_market_fee_percent(const acc
    return {maker_pct, taker_pct};
 }
 
+optional<trade_statistics_object> database::get_trade_statistics_object( const account_id_type &account_id,
+                                                                         const asset_id_type &asset_id ) const
+{
+   const auto tso = detail::get_trade_statistics(*this, account_id, asset_id);
+
+   if( tso )
+   {
+      return *tso;
+   }
+
+   return optional<trade_statistics_object>();
+}
+
 } }

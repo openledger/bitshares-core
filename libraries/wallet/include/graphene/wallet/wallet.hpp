@@ -442,6 +442,15 @@ class wallet_api
       pair<uint16_t, uint16_t> get_dynamic_market_fee_percent( const string &buyer_name_or_id,
                                                                const string &asset_symbol_or_id ) const;
 
+      /**
+       * @brief Get current trade statistics.
+       *
+       * @param buyer_id_or_name The ID or name of the account
+       * @param asset_symbol_or_id The ID or name of the asset being purchased
+       * @return current trade statistics object
+       */
+      optional<trade_statistics_object> get_trade_statistics( const string &buyer_name_or_id,
+                                                              const string &asset_symbol_or_id ) const;
 
       /** Returns the collateral_bid object for the given MPA
        *
@@ -1886,6 +1895,7 @@ FC_API( graphene::wallet::wallet_api,
         (get_call_orders)
         (get_settle_orders)
         (get_dynamic_market_fee_percent)
+        (get_trade_statistics)
         (save_wallet_file)
         (serialize_transaction)
         (sign_transaction)

@@ -127,6 +127,7 @@ class database_api_impl : public std::enable_shared_from_this<database_api_impl>
       vector<market_trade>               get_trade_history_by_sequence( const string& base, const string& quote, int64_t start, fc::time_point_sec stop, unsigned limit = 100 )const;
       pair<uint16_t, uint16_t>           get_dynamic_market_fee_percent( const account_id_type &buyer_id,
                                                                          const asset_id_type &asset_id ) const;
+      optional<trade_statistics_object>  get_trade_statistics( const account_id_type &buyer_id, const asset_id_type &asset_id ) const;
 
       // Witnesses
       vector<optional<witness_object>> get_witnesses(const vector<witness_id_type>& witness_ids)const;
@@ -1744,6 +1745,19 @@ pair<uint16_t, uint16_t> database_api_impl::get_dynamic_market_fee_percent(
               
    const auto result = _db.get_dynamic_market_fee_percent(fee_payer_id, trade_asset);
    return result;
+}
+
+optional<trade_statistics_object> database_api::get_trade_statistics( const account_id_type &account_id,
+                                                                      const asset_id_type &asset_id ) const
+{
+    return my->get_trade_statistics( account_id, asset_id );
+}
+
+optional<trade_statistics_object> database_api_impl::get_trade_statistics( const account_id_type &account_id,
+                                                                           const asset_id_type &asset_id ) const
+{
+    const auto result = _db.get_trade_statistics_object(account_id, asset_id);
+    return result;
 }
 
 //////////////////////////////////////////////////////////////////////

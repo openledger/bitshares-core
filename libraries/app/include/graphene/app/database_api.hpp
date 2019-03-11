@@ -554,6 +554,16 @@ class database_api
       pair<uint16_t, uint16_t> get_dynamic_market_fee_percent( const account_id_type &fee_payer_id,
                                                                const asset_id_type &asset_id ) const;
 
+      /**
+       * @brief Get current trade statistics.
+       *
+       * @param buyer_id_or_name The ID or name of the account
+       * @param asset_symbol_or_id The ID or name of the asset being purchased
+       * @return current trade statistics object
+       */
+      optional<trade_statistics_object> get_trade_statistics( const account_id_type &account_id,
+                                                              const asset_id_type &asset_id ) const;
+
 
 
       ///////////////
@@ -831,6 +841,7 @@ FC_API(graphene::app::database_api,
    (get_trade_history)
    (get_trade_history_by_sequence)
    (get_dynamic_market_fee_percent)
+   (get_trade_statistics)
 
    // Witnesses
    (get_witnesses)
