@@ -160,7 +160,7 @@ extern uint32_t GRAPHENE_TESTING_GENESIS_TIMESTAMP;
 
 #define GET_ACTOR(name) \
    fc::ecc::private_key name ## _private_key = generate_private_key(BOOST_PP_STRINGIZE(name)); \
-   const account_object& name = get_account(BOOST_PP_STRINGIZE(name)); \
+   const account_object name = get_account(BOOST_PP_STRINGIZE(name)); \
    graphene::chain::account_id_type name ## _id = name.id; \
    (void)name ##_id
 
