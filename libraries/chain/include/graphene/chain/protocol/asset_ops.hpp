@@ -45,15 +45,12 @@ namespace graphene { namespace chain {
       flat_set<dynamic_fee> maker_fee;
       flat_set<dynamic_fee> taker_fee;
    };
-   struct additional_asset_options
-   {
-      fc::optional<dynamic_fee_table> dynamic_fees;
-   };
 
    struct additional_asset_options
    {
       fc::optional<uint16_t>                  reward_percent;
       fc::optional<flat_set<account_id_type>> whitelist_market_fee_sharing;
+      fc::optional<dynamic_fee_table>         dynamic_fees;
    };
    typedef extension<additional_asset_options> additional_asset_options_t;
 
@@ -536,7 +533,6 @@ namespace graphene { namespace chain {
 
 } } // graphene::chain
 
-FC_REFLECT( graphene::chain::additional_asset_options, (dynamic_fees) )
 FC_REFLECT( graphene::chain::dynamic_fee_table, (maker_fee)(taker_fee) )
 FC_REFLECT( graphene::chain::dynamic_fee_table::dynamic_fee, (amount)(percent) )
 FC_REFLECT( graphene::chain::asset_claim_fees_operation, (fee)(issuer)(amount_to_claim)(extensions) )
@@ -568,7 +564,7 @@ FC_REFLECT( graphene::chain::bitasset_options,
             (extensions)
           )
 
-FC_REFLECT( graphene::chain::additional_asset_options, (reward_percent)(whitelist_market_fee_sharing) )
+FC_REFLECT( graphene::chain::additional_asset_options, (reward_percent)(whitelist_market_fee_sharing)(dynamic_fees) )
 FC_REFLECT( graphene::chain::asset_create_operation::fee_parameters_type, (symbol3)(symbol4)(long_symbol)(price_per_kbyte) )
 FC_REFLECT( graphene::chain::asset_global_settle_operation::fee_parameters_type, (fee) )
 FC_REFLECT( graphene::chain::asset_settle_operation::fee_parameters_type, (fee) )

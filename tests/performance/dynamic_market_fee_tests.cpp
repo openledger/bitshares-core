@@ -72,13 +72,13 @@ struct dmf_performance_fixture : database_fixture
    asset_object create_and_issue_uia(const std::string& asset_name, const account_object& issuer, 
                                      uint32_t count, bool dynamic = false)
    {
-      additional_asset_options options;
+      additional_asset_options_t options;
       uint16_t flags = charge_market_fee;
 
       if (dynamic)
       {
          dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {10000, 30}}, .taker_fee = {{0,10}, {20000, 45}}};
-         options = {.dynamic_fees = fee_table};
+         options.value.dynamic_fees = fee_table;
          flags |= charge_dynamic_market_fee;
       }
 

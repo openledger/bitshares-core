@@ -415,9 +415,9 @@ namespace graphene { namespace chain {
                                      const asset_object& trade_asset, const asset& trade_amount ) const;
 
          asset pay_market_fees( const asset_object& recv_asset, const asset& receives );
-         asset pay_market_fees( const account_object& seller, const asset_object& recv_asset, const asset& receives );
          asset pay_market_fees( const account_object& fee_payer, const bool is_maker, 
-                                const asset_object& trade_asset, const asset& trade_amount );
+                                const asset_object& trade_asset, const asset& trade_amount,
+                                const bool after_hardfork_DYNAMIC );
          ///@}
 
 

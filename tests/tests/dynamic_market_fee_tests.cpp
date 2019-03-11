@@ -97,7 +97,7 @@ struct dynamic_market_fee_database_fixture : database_fixture
    asset_update_operation get_update_operation(const string& name) const
    {
       dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {10000, 30}}, .taker_fee = {{0,10}, {20000, 45}}};
-      additional_asset_options options = {.dynamic_fees = fee_table};
+      additional_asset_options options = {{}, {}, fee_table};
 
       const auto& uia = get_asset(name);
 
@@ -243,7 +243,7 @@ BOOST_AUTO_TEST_CASE( create_uia_dmf_table_not_available_before_HARDFORK_DYNAMIC
 {
    try {
       dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {2, 30}}, .taker_fee = {{0,10}, {20, 30}}};
-      additional_asset_options options = {.dynamic_fees = fee_table};
+      additional_asset_options options = {{}, {}, fee_table};
 
       asset_create_operation creator = std::move(get_create_operation());
       creator.common_options.extensions.value = options;
@@ -268,7 +268,7 @@ BOOST_AUTO_TEST_CASE( not_allowed_to_create_uia_dmf_before_HARDFORK_DYNAMIC_FEE_
 {
    try {
       dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {2, 30}}, .taker_fee = {{0,10}, {20, 30}}};
-      additional_asset_options options = {.dynamic_fees = fee_table};
+      additional_asset_options options = {{}, {}, fee_table};
 
       asset_create_operation creator = std::move(get_create_operation());
       creator.common_options.flags = charge_dynamic_market_fee;
@@ -299,7 +299,7 @@ BOOST_AUTO_TEST_CASE( not_allowed_to_create_uia_dmf_without_flag_after_HARDFORK_
       set_expiration( db, trx );
 
       dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {2, 30}}, .taker_fee = {{0,10}, {20, 30}}};
-      additional_asset_options options = {.dynamic_fees = fee_table};
+      additional_asset_options options = {{}, {}, fee_table};
 
       asset_create_operation creator = std::move(get_create_operation());
       creator.common_options.extensions.value = options;
@@ -315,7 +315,7 @@ BOOST_AUTO_TEST_CASE( create_uia_dmf_after_HARDFORK_DYNAMIC_FEE_TIME_hf_test )
       set_expiration( db, trx );
 
       dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {2, 30}}, .taker_fee = {{0,10}, {20, 30}}};
-      additional_asset_options options = {.dynamic_fees = fee_table};
+      additional_asset_options options = {{}, {}, fee_table};
 
       asset_id_type test_asset_id = db.get_index<asset_object>().get_next_id();
 
@@ -338,7 +338,7 @@ BOOST_AUTO_TEST_CASE( not_allowed_update_uia_dmf_without_flag_before_HARDFORK_DY
       create_uia();
 
       dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {2, 30}}, .taker_fee = {{0,10}, {20, 30}}};
-      additional_asset_options options = {.dynamic_fees = fee_table};
+      additional_asset_options options = {{}, {}, fee_table};
 
       const auto& uia = get_asset(UIA_TEST_SYMBOL);
 
@@ -360,7 +360,7 @@ BOOST_AUTO_TEST_CASE( not_allowed_update_uia_dmf_without_fee_table_before_HARDFO
       create_uia();
 
       dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {2, 30}}, .taker_fee = {{0,10}, {20, 30}}};
-      additional_asset_options options = {.dynamic_fees = fee_table};
+      additional_asset_options options = {{}, {}, fee_table};
 
       const auto& uia = get_asset(UIA_TEST_SYMBOL);
 
@@ -406,7 +406,7 @@ BOOST_AUTO_TEST_CASE( not_allowed_update_uia_dmf_without_flag_after_HARDFORK_DYN
       create_uia();
 
       dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {2, 30}}, .taker_fee = {{0,10}, {20, 30}}};
-      additional_asset_options options = {.dynamic_fees = fee_table};
+      additional_asset_options options = {{}, {}, fee_table};
 
       const auto& uia = get_asset(UIA_TEST_SYMBOL);
 
@@ -453,7 +453,7 @@ BOOST_AUTO_TEST_CASE( update_uia_dmf_after_HARDFORK_DYNAMIC_FEE_TIME_hf_test )
       create_uia();
 
       dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {2, 30}}, .taker_fee = {{0,10}, {20, 30}}};
-      additional_asset_options options = {.dynamic_fees = fee_table};
+      additional_asset_options options = {{}, {}, fee_table};
       {
          const auto& uia = get_asset(UIA_TEST_SYMBOL);
 
@@ -483,7 +483,7 @@ BOOST_AUTO_TEST_CASE( create_uia_dmf_with_maker_non_zero_amount_test )
       set_expiration( db, trx );
 
       dynamic_fee_table fee_table = {.maker_fee = {{10,10}, {2, 30}}, .taker_fee = {{0,10}, {20, 30}}};
-      additional_asset_options options = {.dynamic_fees = fee_table};
+      additional_asset_options options = {{}, {}, fee_table};
 
       asset_create_operation creator = std::move(get_create_operation());
       creator.common_options.flags = charge_dynamic_market_fee;
@@ -500,7 +500,7 @@ BOOST_AUTO_TEST_CASE( create_uia_dmf_with_taker_non_zero_amount_test )
       set_expiration( db, trx );
 
       dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {2, 30}}, .taker_fee = {{1,10}, {20, 30}}};
-      additional_asset_options options = {.dynamic_fees = fee_table};
+      additional_asset_options options = {{}, {}, fee_table};
 
       asset_create_operation creator = std::move(get_create_operation());
       creator.common_options.flags = charge_dynamic_market_fee;
@@ -519,7 +519,7 @@ BOOST_AUTO_TEST_CASE( update_uia_dmf_with_taker_non_zero_amount_test )
       create_uia();
 
       dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {2, 30}}, .taker_fee = {{1,10}, {20, 30}}};
-      additional_asset_options options = {.dynamic_fees = fee_table};
+      additional_asset_options options = {{}, {}, fee_table};
       const auto& uia = get_asset(UIA_TEST_SYMBOL);
 
       asset_update_operation op;
@@ -543,7 +543,7 @@ BOOST_AUTO_TEST_CASE( update_uia_dmf_with_maker_non_zero_amount_test )
       create_uia();
 
       dynamic_fee_table fee_table = {.maker_fee = {{1,10}, {2, 30}}, .taker_fee = {{0,10}, {20, 30}}};
-      additional_asset_options options = {.dynamic_fees = fee_table};
+      additional_asset_options options = {{}, {}, fee_table};
       const auto& uia = get_asset(UIA_TEST_SYMBOL);
 
       asset_update_operation op;
@@ -568,7 +568,7 @@ BOOST_AUTO_TEST_CASE( create_uia_dmf_with_empty_maker_table_test )
       dynamic_fee_table fee_table;
       fee_table.maker_fee = {};
       fee_table.taker_fee = {{0,10}};
-      additional_asset_options options = {.dynamic_fees = fee_table};
+      additional_asset_options options = {{}, {}, fee_table};
 
       asset_create_operation creator = std::move(get_create_operation());
       creator.common_options.flags = charge_dynamic_market_fee;
@@ -588,7 +588,7 @@ BOOST_AUTO_TEST_CASE( create_uia_dmf_with_empty_taker_table_test )
       dynamic_fee_table fee_table;
       fee_table.maker_fee = {{0,10}};
       fee_table.taker_fee = {};
-      additional_asset_options options = {.dynamic_fees = fee_table};
+      additional_asset_options options = {{}, {}, fee_table};
 
       asset_create_operation creator = std::move(get_create_operation());
       creator.common_options.flags = charge_dynamic_market_fee;
@@ -610,7 +610,7 @@ BOOST_AUTO_TEST_CASE( update_uia_dmf_with_empty_maker_table_test )
       dynamic_fee_table fee_table;
       fee_table.maker_fee = {};
       fee_table.taker_fee = {{1,10}, {2, 30}};
-      additional_asset_options options = {.dynamic_fees = fee_table};
+      additional_asset_options options = {{}, {}, fee_table};
       const auto& uia = get_asset(UIA_TEST_SYMBOL);
 
       asset_update_operation op;
@@ -636,7 +636,7 @@ BOOST_AUTO_TEST_CASE( update_uia_dmf_with_empty_taker_table_test )
       dynamic_fee_table fee_table;
       fee_table.maker_fee = {{1,10}, {2, 30}};
       fee_table.taker_fee = {};
-      additional_asset_options options = {.dynamic_fees = fee_table};
+      additional_asset_options options = {{}, {}, fee_table};
       const auto& uia = get_asset(UIA_TEST_SYMBOL);
 
       asset_update_operation op;
@@ -660,7 +660,7 @@ BOOST_AUTO_TEST_CASE( create_uia_dmf_with_incorrect_taker_percent_test )
       dynamic_fee_table fee_table;
       fee_table.maker_fee = {{0,10}};
       fee_table.taker_fee = {{0,10001}};
-      additional_asset_options options = {.dynamic_fees = fee_table};
+      additional_asset_options options = {{}, {}, fee_table};
 
       asset_create_operation creator = std::move(get_create_operation());
       creator.common_options.flags = charge_dynamic_market_fee;
@@ -680,7 +680,7 @@ BOOST_AUTO_TEST_CASE( update_uia_dmf_with_incorrect_taker_percent_test )
       create_uia();
 
       dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {2, 30}}, .taker_fee = {{0,10}, {20, 10001}}};
-      additional_asset_options options = {.dynamic_fees = fee_table};
+      additional_asset_options options = {{}, {}, fee_table};
       const auto& uia = get_asset(UIA_TEST_SYMBOL);
 
       asset_update_operation op;
@@ -704,7 +704,7 @@ BOOST_AUTO_TEST_CASE( create_uia_dmf_with_incorrect_taker_amount_test )
       dynamic_fee_table fee_table;
       fee_table.maker_fee = {{0,10}};
       fee_table.taker_fee = {{-10,10000}};
-      additional_asset_options options = {.dynamic_fees = fee_table};
+      additional_asset_options options = {{}, {}, fee_table};
 
       asset_create_operation creator = std::move(get_create_operation());
       creator.common_options.flags = charge_dynamic_market_fee;
@@ -724,7 +724,7 @@ BOOST_AUTO_TEST_CASE( update_uia_dmf_with_incorrect_taker_amount_test )
       create_uia();
 
       dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {2, 30}}, .taker_fee = {{0,10}, {-20, 100}}};
-      additional_asset_options options = {.dynamic_fees = fee_table};
+      additional_asset_options options = {{}, {}, fee_table};
       const auto& uia = get_asset(UIA_TEST_SYMBOL);
 
       asset_update_operation op;
@@ -748,7 +748,7 @@ BOOST_AUTO_TEST_CASE( create_uia_dmf_with_incorrect_maker_percent_test )
       dynamic_fee_table fee_table;
       fee_table.maker_fee = {{0,10002}};
       fee_table.taker_fee = {{0,10}};
-      additional_asset_options options = {.dynamic_fees = fee_table};
+      additional_asset_options options = {{}, {}, fee_table};
 
       asset_create_operation creator = std::move(get_create_operation());
       creator.common_options.flags = charge_dynamic_market_fee;
@@ -768,7 +768,7 @@ BOOST_AUTO_TEST_CASE( update_uia_dmf_with_incorrect_maker_percent_test )
       create_uia();
 
       dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {2, 10002}}, .taker_fee = {{0,10}, {20, 100}}};
-      additional_asset_options options = {.dynamic_fees = fee_table};
+      additional_asset_options options = {{}, {}, fee_table};
       const auto& uia = get_asset(UIA_TEST_SYMBOL);
 
       asset_update_operation op;
@@ -792,7 +792,7 @@ BOOST_AUTO_TEST_CASE( create_uia_dmf_with_incorrect_maker_amount_test )
       dynamic_fee_table fee_table;
       fee_table.maker_fee = {{-1,10000}};
       fee_table.taker_fee = {{0,10}};
-      additional_asset_options options = {.dynamic_fees = fee_table};
+      additional_asset_options options = {{}, {}, fee_table};
 
       asset_create_operation creator = std::move(get_create_operation());
       creator.common_options.flags = charge_dynamic_market_fee;
@@ -812,7 +812,7 @@ BOOST_AUTO_TEST_CASE( update_uia_dmf_with_incorrect_maker_amount_test )
       create_uia();
 
       dynamic_fee_table fee_table = {.maker_fee = {{0,10}, {-2, 10}}, .taker_fee = {{0,10}, {20, 100}}};
-      additional_asset_options options = {.dynamic_fees = fee_table};
+      additional_asset_options options = {{}, {}, fee_table};
       const auto& uia = get_asset(UIA_TEST_SYMBOL);
 
       asset_update_operation op;

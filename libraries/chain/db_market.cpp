@@ -914,12 +914,9 @@ bool database::fill_limit_order( const limit_order_object& order, const asset& p
 
    bool after_hardfork_DYNAMIC_FEE = ( head_block_time() >= HARDFORK_DYNAMIC_FEE_TIME );
 
-   // TODO review and combine logic of two hardforks: 1268 and DYNAMIC
    auto issuer_fees = ( head_block_time() < HARDFORK_1268_TIME ) ? 
-      pay_market_fees(recv_asset, receives) : 
-      after_hardfork_DYNAMIC_FEE ? 
-         pay_market_fees(seller, is_maker, recv_asset, receives) :
-         pay_market_fees(seller, recv_asset, receives);
+         pay_market_fees(recv_asset, receives) : 
+         pay_market_fees(seller, is_maker, recv_asset, receives, after_hardfork_DYNAMIC_FEE);
       
    pay_order( seller, receives - issuer_fees, pays );
 
@@ -1339,7 +1336,7 @@ asset database::calculate_market_fee(const account_object& fee_payer, const bool
    }
 
    auto value = detail::calculate_percent(trade_amount.amount, market_fee_percent);
-   asset percent_fee = trade_asset.amount(value.to_uint64());
+   asset percent_fee = trade_asset.amount(value);
 
    if( percent_fee.amount > trade_asset.options.max_market_fee )
    {
@@ -1359,30 +1356,25 @@ asset database::pay_market_fees( const asset_object& recv_asset, const asset& re
    return issuer_fees;
 }
 
-asset database::pay_market_fees(const account_object& fee_payer, const bool is_maker,
-                                const asset_object& trade_asset, const asset& trade_amount)
+asset database::pay_market_fees(const account_object& fee_payer, const bool is_maker, 
+                                const asset_object& recv_asset, const asset& receives,
+                                const bool after_hardfork_DYNAMIC)
 {
-   auto issuer_fees = calculate_market_fee( fee_payer, is_maker, trade_asset, trade_amount );
-   FC_ASSERT( issuer_fees <= trade_amount, "Market fee shouldn't be greater than receives");
+   const auto issuer_fees = after_hardfork_DYNAMIC ?
+                              calculate_market_fee( fee_payer, is_maker, recv_asset, receives ) :
+                              calculate_market_fee( recv_asset, receives );
 
-   detail::accumulate_fees_to_be_paid( *this, trade_asset, issuer_fees );
-
-   return issuer_fees;
-}
-
-asset database::pay_market_fees(const account_object& seller, const asset_object& recv_asset, const asset& receives )
-{
-   const auto issuer_fees = calculate_market_fee( recv_asset, receives );
    FC_ASSERT( issuer_fees <= receives, "Market fee shouldn't be greater than receives");
-   //Don't dirty undo state if not actually collecting any fees
+   
+   // Don't dirty undo state if not actually collecting any fees
    if ( issuer_fees.amount > 0 )
    {
       // calculate and pay rewards
       asset reward = recv_asset.amount(0);
 
-      auto is_rewards_allowed = [&recv_asset, &seller]() {
+      auto is_rewards_allowed = [&recv_asset, &fee_payer]() {
          const auto &white_list = recv_asset.options.extensions.value.whitelist_market_fee_sharing;
-         return ( !white_list || (*white_list).empty() || ( (*white_list).find(seller.registrar) != (*white_list).end() ) );
+         return ( !white_list || (*white_list).empty() || ( (*white_list).find(fee_payer.registrar) != (*white_list).end() ) );
       };
 
       if ( is_rewards_allowed() )
@@ -1391,23 +1383,25 @@ asset database::pay_market_fees(const account_object& seller, const asset_object
          if ( reward_percent && *reward_percent )
          {
             const auto reward_value = detail::calculate_percent(issuer_fees.amount, *reward_percent);
-            if ( reward_value > 0 && is_authorized_asset(*this, seller.registrar(*this), recv_asset) )
+            if ( reward_value > 0 && is_authorized_asset(*this, fee_payer.registrar(*this), recv_asset) )
             {
                reward = recv_asset.amount(reward_value);
-               FC_ASSERT( reward < issuer_fees, "Market reward should be less than issuer fees");
+               FC_ASSERT( reward < issuer_fees, "Market reward should be less than issuer fees" );
+
                // cut referrer percent from reward
-               const auto referrer_rewards_percentage = seller.referrer_rewards_percentage;
+               const auto referrer_rewards_percentage = fee_payer.referrer_rewards_percentage;
                const auto referrer_rewards_value = detail::calculate_percent(reward.amount, referrer_rewards_percentage);
                auto registrar_reward = reward;
 
-               if ( referrer_rewards_value > 0 && is_authorized_asset(*this, seller.referrer(*this), recv_asset))
+               if ( referrer_rewards_value > 0 && is_authorized_asset(*this, fee_payer.referrer(*this), recv_asset) )
                {
                   FC_ASSERT ( referrer_rewards_value <= reward.amount, "Referrer reward shouldn't be greater than total reward" );
                   const asset referrer_reward = recv_asset.amount(referrer_rewards_value);
                   registrar_reward -= referrer_reward;
-                  deposit_market_fee_vesting_balance(seller.referrer, referrer_reward);
+                  deposit_market_fee_vesting_balance(fee_payer.referrer, referrer_reward);
                }
-               deposit_market_fee_vesting_balance(seller.registrar, registrar_reward);
+
+               deposit_market_fee_vesting_balance(fee_payer.registrar, registrar_reward);
             }
          }
       }
@@ -1422,7 +1416,7 @@ asset database::pay_market_fees(const account_object& seller, const asset_object
 }
 
 std::pair<uint16_t, uint16_t> database::get_dynamic_market_fee_percent(const account_id_type& fee_payer_id, 
-                                                                  const asset_object& trade_asset) const
+                                                                       const asset_object& trade_asset) const
 {
    assert( trade_asset.charges_dynamic_market_fees() );
 
