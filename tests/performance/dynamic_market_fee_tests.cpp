@@ -103,12 +103,33 @@ struct dmf_performance_fixture : database_fixture
       }
    }
 
-   void initialize_trade_statistics(const asset_id_type& asset_id)
+   void generate_accounts(int count)
+   {
+      for (auto i = 0; i < count; ++i )
+      {
+         db.create<account_object>( [&](account_object& account) {
+            account.membership_expiration_date = time_point_sec::maximum();
+            account.network_fee_percentage = GRAPHENE_DEFAULT_NETWORK_PERCENT_OF_FEE;
+            account.lifetime_referrer_fee_percentage = GRAPHENE_100_PERCENT - GRAPHENE_DEFAULT_NETWORK_PERCENT_OF_FEE;
+            account.owner.weight_threshold = 1;
+            account.active.weight_threshold = 1;
+            account.name = "account-" + std::to_string(i);
+
+            account.statistics = db.create<account_statistics_object>( [&account](account_statistics_object& stat) {
+               stat.owner = account.id;
+               stat.name = account.name;
+               stat.core_in_balance = GRAPHENE_MAX_SHARE_SUPPLY;
+            }).id;
+         });
+      }
+   }
+
+   void initialize_trade_statistics(const asset_id_type& asset_id, uint32_t start_with_account_id)
    {
       auto block_time = db.head_block_time();
-      
-      constexpr auto max_statistics_noise = 10000000UL;
-      for (uint64_t instance = 0; instance < max_statistics_noise; ++instance)
+
+      const auto max_statistics_noise = start_with_account_id + 10000000UL;
+      for (uint64_t instance = start_with_account_id; instance < max_statistics_noise; ++instance)
       {
          db.create<trade_statistics_object>([&instance, &asset_id, &block_time](trade_statistics_object &o) {
             o.account_id = account_id_type(instance);
@@ -142,15 +163,18 @@ BOOST_AUTO_TEST_CASE(performance_before_HARDFORK_DYNAMIC_FEE_TIME_hf_test)
 
       generate_block();
 
-      const auto accounts = 3000;
-      const auto iterations = 20;
+      const auto accounts = 1000;
+      const auto iterations = 1;
       const auto uia_to_sell = 2000;
 
       generate_blocks(HARDFORK_DYNAMIC_FEE_TIME - 1000);
 
+      generate_accounts(1000000);
       const auto ui_asset = create_and_issue_uia("UIASSET", issuer, iterations * accounts * uia_to_sell);
+
       const auto traders = create_accounts(accounts);
       transfer_uia(traders, issuer_id, ui_asset.amount(iterations * uia_to_sell));
+      initialize_trade_statistics(ui_asset.get_id(), traders.back().get_id().instance.value + 1);
 
       using namespace std::chrono;
 
@@ -182,17 +206,19 @@ BOOST_AUTO_TEST_CASE(performance_after_HARDFORK_DYNAMIC_FEE_TIME_hf_test)
 
       generate_block();
 
-      const auto accounts = 3000;
-      const auto iterations = 20;
+      const auto accounts = 1000;
+      const auto iterations = 1;
       const auto uia_to_sell = 2000;
 
       generate_blocks(HARDFORK_DYNAMIC_FEE_TIME);
 
+      generate_accounts(1000000);
       const auto ui_asset = create_and_issue_uia("UIASSET", issuer, iterations * accounts * uia_to_sell, true);
-      initialize_trade_statistics(ui_asset.get_id());
 
       const auto traders = create_accounts(accounts);
       transfer_uia(traders, issuer_id, ui_asset.amount(iterations * uia_to_sell));
+
+      initialize_trade_statistics(ui_asset.get_id(), traders.back().get_id().instance.value + 1);
 
       using namespace std::chrono;
 
@@ -218,4 +244,3 @@ BOOST_AUTO_TEST_CASE(performance_after_HARDFORK_DYNAMIC_FEE_TIME_hf_test)
 }
 
 BOOST_AUTO_TEST_SUITE_END()
-
