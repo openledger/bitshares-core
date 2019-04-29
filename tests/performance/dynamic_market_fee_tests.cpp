@@ -48,14 +48,84 @@ namespace fc
 
 struct dmf_performance_fixture : database_fixture
 {
-   std::vector<account_object> create_accounts(uint32_t count)
+   // How many traders to create
+   const static auto traders_count = 100;
+   // Count of cycles for trading
+   const static auto iterations = 1;
+   // How many assets to sell/buy
+   const static auto uia_to_sell = 20;
+   // How many assets to create
+   const static auto ui_assets_count = 100;
+
+   // without verify_asset_supplies
+   void fast_upgrade_to_lifetime_member( const account_object& account )
+   {
+      try
+      {
+         account_upgrade_operation op;
+         op.account_to_upgrade = account.get_id();
+         op.upgrade_to_lifetime_member = true;
+         op.fee = db.get_global_properties().parameters.current_fees->calculate_fee(op);
+         trx.operations = {op};
+         PUSH_TX(db, trx, ~0);
+         FC_ASSERT( op.account_to_upgrade(db).is_lifetime_member() );
+         trx.clear();
+      }
+      FC_CAPTURE_AND_RETHROW((account))
+   }
+
+   // without verify_asset_supplies
+   void fast_transfer(const account_id_type& from, const account_id_type& to, const asset& amount, const asset& fee = asset() )
+   {
+      try
+      {
+         test::set_expiration( db, trx );
+         transfer_operation trans;
+         trans.from = from;
+         trans.to   = to;
+         trans.amount = amount;
+         trx.operations.push_back(trans);
+
+         if( fee == asset() )
+         {
+            for( auto& op : trx.operations ) db.current_fee_schedule().set_fee(op);
+         }
+         trx.validate();
+         PUSH_TX(db, trx, ~0);
+         trx.operations.clear();
+      } FC_CAPTURE_AND_RETHROW( (from)(to)(amount)(fee) )
+   }
+
+     // without verify_asset_supplies
+   const limit_order_object* fast_create_sell_order( const account_object& user, const asset& amount, const asset& recv,
+                                                const time_point_sec order_expiration = time_point_sec::maximum(),
+                                                const price& fee_core_exchange_rate = price::unit_price() )
+   {
+      test::set_expiration( db, trx );
+      trx.operations.clear();
+
+      limit_order_create_operation buy_order;
+      buy_order.seller = user.id;
+      buy_order.amount_to_sell = amount;
+      buy_order.min_to_receive = recv;
+      buy_order.expiration = order_expiration;
+      trx.operations.push_back(buy_order);
+      for( auto& op : trx.operations ) db.current_fee_schedule().set_fee(op, fee_core_exchange_rate);
+      trx.validate();
+      auto processed = PUSH_TX(db, trx, ~0);
+      trx.operations.clear();
+      return db.find<limit_order_object>( processed.operation_results[0].get<object_id_type>() );
+   }
+
+   using accounts_t = std::vector<account_object>;
+   accounts_t create_accounts(uint32_t count)
    {
       std::vector<account_object> registrators;
       for (unsigned int i = 0; i < count; ++i)
       {
          auto account = create_account("registrar" + std::to_string(i));
-         transfer(committee_account, account.get_id(), asset(1000000));
-         upgrade_to_lifetime_member(account);
+         fast_transfer(committee_account, account.get_id(), asset(1000000));
+         fast_upgrade_to_lifetime_member(account);
 
          registrators.push_back(std::move(account));
       }
@@ -105,38 +175,27 @@ struct dmf_performance_fixture : database_fixture
       return uia_list;
    }
 
-   void transfer_uia(const std::vector<account_object>& accounts, const account_id_type from,const asset& amount)
+   void transfer_uia(const accounts_t& accounts, const account_id_type from,const asset& amount)
    {
       for (auto& account: accounts)
       {
-         transfer(committee_account, account.get_id(), asset(1000));
-         transfer(from, account.get_id(), amount);
+         fast_transfer(committee_account, account.get_id(), asset(1000));
+         fast_transfer(from, account.get_id(), amount);
       }
    }
 
-   using balances_t = std::vector<std::pair<account_object, asset_object>>;
-   balances_t transfer_uia(const std::vector<account_object>& accounts,
-                           const account_id_type from,
-                           const ui_assets_t& uia_list,
-                           const share_type& amount)
+   void transfer_uia(const accounts_t& accounts, 
+                     const account_id_type from,
+                     const ui_assets_t& uia_list,
+                     const share_type& amount)
    {
-      balances_t balances;
-      auto uia_it = uia_list.begin();
-      assert(uia_it != uia_list.end());
-
       for (const auto& account : accounts)
       {
-         transfer(committee_account, account.get_id(), asset(1000));
-         transfer(from, account.get_id(), uia_it->amount(amount));
-         balances.emplace_back(std::make_pair(account, *uia_it));
-
-         ++uia_it;
-         if (uia_it == uia_list.end())
+         for (const auto& uia : uia_list)
          {
-            uia_it = uia_list.begin();
+            fast_transfer(from, account.get_id(), uia.amount(amount));
          }
       }
-      return balances;
    }
 
    void generate_accounts(int count)
@@ -175,43 +234,29 @@ struct dmf_performance_fixture : database_fixture
       }
    }
 
-   void create_sell_orders(const balances_t& balances, uint32_t iterations, const share_type& amount)
+   void create_sell_orders(const accounts_t& traders, const ui_assets_t& assets, uint32_t iterations, const share_type& amount)
    {
-      const auto count = balances.size();
+      const auto traders_count = traders.size();
+
       for (unsigned int i = 0; i < iterations; ++i)
       {
-         for (unsigned int j = 0; j < count; ++j)
+         for (unsigned int j = 0; j < traders_count; ++j)
          {
-            const auto& maker          = balances[j].first;
-            const auto& taker          = balances[count - j - 1].first;
-            const auto& asset_to_sell  = balances[j].second.amount(amount);
-            const auto& asset_to_buy   = asset(1);
+            const auto& maker          = traders[j];
+            const auto& taker          = traders[traders_count - j - 1];
 
-            create_sell_order(maker, asset_to_sell, asset_to_buy);
-            create_sell_order(taker, asset_to_buy, asset_to_sell);
+            const auto assets_count = assets.size();
+
+            for (unsigned int k = 0; k < assets_count; ++k)
+            {
+               const auto& asset_to_sell  = assets[k].amount(amount);
+               const auto& asset_to_buy   = assets[assets_count - k - 1].amount(amount);
+
+               fast_create_sell_order(maker, asset_to_sell, asset_to_buy);
+               fast_create_sell_order(taker, asset_to_buy, asset_to_sell);
+            }
          }
       }
-   }
-
-   std::map<asset_id_type, int> uia_factors(const ui_assets_t& uia_list, int accounts)
-   {
-      const size_t total_uia_cycles = accounts / uia_list.size();
-      const size_t rest_of_assets = accounts % uia_list.size();
-      std::map<asset_id_type, int> factors;
-
-      size_t i = 1;
-      for(const auto &uia: uia_list)
-      {
-         if (i > uia_list.size())
-         {
-            i = 1;
-         }
-
-         const auto factor = (i > rest_of_assets) ? total_uia_cycles : total_uia_cycles + 1;
-         factors[uia.get_id()] = factor;
-         ++i;
-      }
-      return factors;
    }
 };
 
@@ -225,18 +270,13 @@ BOOST_AUTO_TEST_CASE(performance_before_HARDFORK_DYNAMIC_FEE_TIME_hf_test)
 
       generate_block();
 
-      const auto accounts = 1000;
-      const auto iterations = 1;
-      const auto uia_to_sell = 2000;
-      const auto ui_assets = 100;
-
       generate_blocks(HARDFORK_DYNAMIC_FEE_TIME - 1000);
 
       generate_accounts(1000000);
-      const auto uia_list = create_and_issue_uia(issuer, ui_assets, iterations * accounts * uia_to_sell);
+      const auto uia_list = create_and_issue_uia(issuer, ui_assets_count, 2 * iterations * traders_count * uia_to_sell);
 
-      const auto traders = create_accounts(accounts);
-      const auto balances = transfer_uia(traders, issuer_id, uia_list, iterations * uia_to_sell);
+      const auto traders = create_accounts(traders_count);
+      transfer_uia(traders, issuer_id, uia_list, 2 * iterations * uia_to_sell);
 
       initialize_trade_statistics(asset_id_type(), traders.back().get_id().instance.value + 1);
 
@@ -244,21 +284,23 @@ BOOST_AUTO_TEST_CASE(performance_before_HARDFORK_DYNAMIC_FEE_TIME_hf_test)
 
       const auto start = high_resolution_clock::now();
 
-      create_sell_orders(balances, iterations, uia_to_sell);
+      create_sell_orders(traders, uia_list, iterations, uia_to_sell);
 
       const auto end = high_resolution_clock::now();
 
       const auto elapsed = duration_cast<milliseconds>(end - start);
       wlog("performance_before_HARDFORK_DYNAMIC_FEE_TIME_hf_test took: ${c} ms", ("c", elapsed.count()));
 
-      const auto expected_fees = calculate_percent(uia_to_sell * iterations, 20 * GRAPHENE_1_PERCENT);
-      auto factors = uia_factors(uia_list, accounts);
+      const auto expected_fees = 2 * traders_count * calculate_percent(uia_to_sell * iterations, 20 * GRAPHENE_1_PERCENT);
 
-      for (const auto& account_uia_pair : balances)
+      for (const auto& uia : uia_list)
       {
-         BOOST_REQUIRE_EQUAL(account_uia_pair.second.dynamic_asset_data_id(db).accumulated_fees, expected_fees * factors[account_uia_pair.second.get_id()]);
-         const auto statistic = get_trade_statistics(db, account_uia_pair.first.get_id(), account_uia_pair.second.get_id());
-         BOOST_REQUIRE(statistic == nullptr);
+         BOOST_REQUIRE_EQUAL(uia.dynamic_asset_data_id(db).accumulated_fees, expected_fees );
+         for (const auto& trader : traders)
+         {
+            const auto statistic = get_trade_statistics(db, trader.get_id(), uia.get_id());
+            BOOST_REQUIRE(statistic == nullptr);
+         }
       }
    }
    FC_LOG_AND_RETHROW()
@@ -272,47 +314,40 @@ BOOST_AUTO_TEST_CASE(performance_after_HARDFORK_DYNAMIC_FEE_TIME_hf_test)
 
       generate_block();
 
-      const auto accounts = 1000;
-      const auto iterations = 1;
-      const auto uia_to_sell = 2000;
-      const auto ui_assets = 100;
-
       generate_blocks(HARDFORK_DYNAMIC_FEE_TIME);
 
       generate_accounts(1000000);
-      const auto uia_list = create_and_issue_uia(issuer, ui_assets, iterations * accounts * uia_to_sell, true);
+      const auto uia_list = create_and_issue_uia(issuer, ui_assets_count, 2 * iterations * traders_count * uia_to_sell, true);
 
-      const auto traders = create_accounts(accounts);
-      const auto balances = transfer_uia(traders, issuer_id, uia_list, iterations * uia_to_sell);
+      const auto traders = create_accounts(traders_count);
+      transfer_uia(traders, issuer_id, uia_list, 2 * iterations * uia_to_sell);
 
       initialize_trade_statistics(asset_id_type(), traders.back().get_id().instance.value + 1);
 
       using namespace std::chrono;
 
       const auto start = high_resolution_clock::now();
-      create_sell_orders(balances, iterations, uia_to_sell);
+      create_sell_orders(traders, uia_list, iterations, uia_to_sell);
 
       const auto end = high_resolution_clock::now();
 
       const auto elapsed = duration_cast<milliseconds>(end - start);
       wlog("performance_after_HARDFORK_DYNAMIC_FEE_TIME_hf_test took: ${c} ms", ("c", elapsed.count()));
 
-      const auto expected_volume_per_trader = (uia_to_sell * iterations);
+      const auto expected_volume_per_trader = 2 * (uia_to_sell * iterations);
       const auto expected_fees = calculate_percent(expected_volume_per_trader, GRAPHENE_1_PERCENT);
 
-      auto factors = uia_factors(uia_list, accounts);
-
-      auto rit = balances.rbegin();
-      for (const auto& account_uia_pair : balances)
+      for (const auto& uia : uia_list)
       {
-         BOOST_REQUIRE_EQUAL(account_uia_pair.second.dynamic_asset_data_id(db).accumulated_fees, expected_fees * factors[account_uia_pair.second.get_id()] );
-         const auto statistic = get_trade_statistics(db, account_uia_pair.first.get_id(), rit->second.get_id());
-         BOOST_REQUIRE_EQUAL(statistic->total_volume.amount, expected_volume_per_trader);
-         ++rit;
+         BOOST_REQUIRE_EQUAL(uia.dynamic_asset_data_id(db).accumulated_fees, expected_fees );
+         for (const auto& trader : traders)
+         {
+            const auto statistic = get_trade_statistics(db, trader.get_id(), uia.get_id());
+            BOOST_REQUIRE_EQUAL(statistic->total_volume.amount, expected_volume_per_trader);
+         }
       }
    }
    FC_LOG_AND_RETHROW()
 }
 
 BOOST_AUTO_TEST_SUITE_END()
-
