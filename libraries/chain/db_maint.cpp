@@ -47,7 +47,43 @@
 #include <graphene/chain/witness_object.hpp>
 #include <graphene/chain/worker_object.hpp>
 
-namespace graphene { namespace chain {
+namespace graphene { namespace chain { namespace detail {
+
+   uint64_t get_account_fee(const share_type total_fee, const uint16_t account_percent)
+   {
+      if( total_fee == 0 || account_percent == 0 )
+         return 0;
+      if( account_percent == GRAPHENE_100_PERCENT )
+         return total_fee.value;
+
+      fc::uint128 r(total_fee.value);
+      r *= account_percent;
+      r /= GRAPHENE_100_PERCENT;
+      return r.to_uint64();
+   }
+
+   uint64_t get_account_balance_percent(const share_type total_balance,
+                                        const share_type account_balance)
+   {
+      if( total_balance == 0 || account_balance == 0 )
+         return 0;
+      if( total_balance == account_balance )
+         return GRAPHENE_100_PERCENT;
+
+      fc::uint128 r(account_balance.value);
+      r *= GRAPHENE_100_PERCENT;
+      r /= total_balance.value;
+      return r.to_uint64();
+   }
+
+} //detail
+
+struct account_stock_asset_balance
+{
+   account_id_type account_id;
+   share_type      amount;
+};
+
 
 template<class Index>
 vector<std::reference_wrapper<const typename Index::object_type>> database::sort_votable_objects(size_t count) const
@@ -605,6 +641,64 @@ void update_top_n_authorities( database& db )
    } );
 }
 
+void distribute_rewards( database& db )
+{
+   const auto& assets_by_symbol = db.get_index_type<asset_index>().indices().get<by_symbol>();
+   for( const asset_object& itr : assets_by_symbol )
+   {
+      vector<account_stock_asset_balance> list_account;
+      if(!itr.options.extensions.value.revenue_assets.valid())
+      {
+         continue;
+      }
+      auto rev_asset = *itr.options.extensions.value.revenue_assets;
+      if(!rev_asset.empty())
+      {
+         //fill list of holders && calculate total balance for current asset
+         share_type balance_stock_asset = 0;
+         const auto& bal_idx = db.get_index_type< account_balance_index >().indices().get< by_asset_balance >();
+         auto range = bal_idx.equal_range( boost::make_tuple( itr.id ) );
+         for( const account_balance_object& bal : boost::make_iterator_range( range.first, range.second ) )
+         {
+            const auto account = db.find(bal.owner);
+            account_stock_asset_balance asab;
+            asab.account_id = account->id;
+            asab.amount     = bal.balance.value;
+            list_account.push_back(asab);
+
+            balance_stock_asset += bal.get_balance().amount;
+         }
+
+         for(const asset_id_type& id : rev_asset)
+         {
+            //check fees revenue asset
+            const asset_object& sa = asset_id_type(id)(db);
+            const asset_dynamic_data_object& sa_dd = sa.dynamic_asset_data_id(db);
+            share_type total_fees = sa_dd.accumulated_fees;
+            if (total_fees > 0)
+            {
+               // calculate and pay rewards
+               for (const auto& itr : list_account)
+               {
+                  uint16_t acount_stock_percent = detail::get_account_balance_percent(balance_stock_asset, itr.amount);
+                  share_type acc_reward = detail::get_account_fee(total_fees, acount_stock_percent);
+                  const asset asset_reward(acc_reward, id);
+                  //TODO CORE-613
+                  if(asset_reward.amount == 0)
+                  {
+                     break;
+                  }
+                  db.deposit_market_fee_vesting_balance(itr.account_id, asset_reward);
+                  db.modify( sa_dd, [&]( asset_dynamic_data_object& obj ){
+                     obj.accumulated_fees -= acc_reward;
+                  });
+               }
+            }
+         }//for rev_asset
+      }
+   }
+}
+
 void split_fba_balance(
    database& db,
    uint64_t fba_id,
@@ -1147,10 +1241,16 @@ void process_hf_935( database& db )
 
 void database::perform_chain_maintenance(const signed_block& next_block, const global_property_object& global_props)
 {
+   ilog("Started in block=#${n}", ("n", next_block.block_num()));
    const auto& gpo = get_global_properties();
 
    distribute_fba_balances(*this);
    create_buyback_orders(*this);
+
+   if( head_block_time() >= HARDFORK_STOCK_ASSET_TIME )
+   {
+      distribute_rewards(*this);
+   }
 
    struct vote_tally_helper {
       database& d;
@@ -1329,6 +1429,8 @@ void database::perform_chain_maintenance(const signed_block& next_block, const g
    // process_budget needs to run at the bottom because
    //   it needs to know the next_maintenance_time
    process_budget();
+
+   ilog("Finished in block=#${n}", ("n", next_block.block_num()));
 }
 
 } }

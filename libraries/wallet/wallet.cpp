@@ -3264,6 +3264,14 @@ vector<asset_object> wallet_api::list_assets(const string& lowerbound, uint32_t 
    return my->_remote_db->list_assets( lowerbound, limit );
 }
 
+vector<asset_object> wallet_api::list_stock_assets(uint32_t limit)const
+{
+   FC_ASSERT( my->_remote_db->get_dynamic_global_properties().time >= HARDFORK_STOCK_ASSET_TIME,
+              "The 'list_stock_assets' is only available after HARDFORK_STOCK_ASSET_TIME!.");
+   return my->_remote_db->list_stock_assets(limit);
+}
+
+
 uint64_t wallet_api::get_asset_count()const
 {
    return my->_remote_db->get_asset_count();

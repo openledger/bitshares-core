@@ -1,0 +1,4 @@
+// stock asset 
+#ifndef HARDFORK_STOCK_ASSET_TIME
+#define HARDFORK_STOCK_ASSET_TIME (fc::time_point_sec( 1557748800 )) // May 13, 2019 12:00:00 PM
+#endif

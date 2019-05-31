@@ -138,7 +138,6 @@ namespace graphene { namespace chain {
          void  adjust_balance(const asset& delta);
    };
 
-
    /**
     * @brief This class represents an account on the object graph
     * @ingroup object
@@ -438,7 +437,6 @@ namespace graphene { namespace chain {
     * @ingroup object_index
     */
    typedef generic_index<account_statistics_object, account_stats_multi_index_type> account_stats_index;
-
 }}
 
 MAP_OBJECT_ID_TO_TYPE(graphene::chain::account_object)

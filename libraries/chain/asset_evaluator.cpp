@@ -61,6 +61,19 @@ void_result asset_create_evaluator::do_evaluate( const asset_create_operation& o
 
    detail::check_asset_options_hf_1268(d.head_block_time(), op.common_options);
 
+   if( d.head_block_time() < HARDFORK_STOCK_ASSET_TIME )
+   {
+      FC_ASSERT(!op.common_options.extensions.value.revenue_assets.valid());
+   }
+   else
+   {
+      if(op.common_options.extensions.value.revenue_assets.valid())
+      {
+         for( auto id : *op.common_options.extensions.value.revenue_assets )
+            d.get_object(id);
+      }
+   }
+
    // Check that all authorities do exist
    for( auto id : op.common_options.whitelist_authorities )
       d.get_object(id);
@@ -289,6 +302,14 @@ void_result asset_update_evaluator::do_evaluate(const asset_update_operation& o)
    }
 
    detail::check_asset_options_hf_1268(d.head_block_time(), o.new_options);
+
+   if ( o.new_options.extensions.value.revenue_assets.valid() )
+   {
+      FC_ASSERT( d.head_block_time() >= HARDFORK_STOCK_ASSET_TIME,
+         "Referrer percent is only available after HARDFORK_STOCK_ASSET_TIME!");
+      for( auto id : *o.new_options.extensions.value.revenue_assets )
+         d.get_object(id);
+   }
 
    if( (d.head_block_time() < HARDFORK_572_TIME) || (a.dynamic_asset_data_id(d).current_supply != 0) )
    {

@@ -411,6 +411,13 @@ class database_api
       vector<asset_object> list_assets(const string& lower_bound_symbol, uint32_t limit)const;
 
       /**
+       * @brief Get stock assets alphabetically by symbol name
+       * @param limit Maximum number of assets to fetch (must not exceed 101)
+       * @return The stock assets found
+       */
+      vector<asset_object> list_stock_assets(uint32_t limit)const;
+
+      /**
        * @brief Get a list of assets by symbol
        * @param asset_symbols Symbols or stringified IDs of the assets to retrieve
        * @return The assets corresponding to the provided symbols or IDs
@@ -866,6 +873,7 @@ FC_API(graphene::app::database_api,
    // Assets
    (get_assets)
    (list_assets)
+   (list_stock_assets)
    (lookup_asset_symbols)
    (get_asset_count)
    (get_assets_by_issuer)

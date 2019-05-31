@@ -368,6 +368,14 @@ class wallet_api
        * @returns the list of asset objects, ordered by symbol
        */
       vector<asset_object>              list_assets(const string& lowerbound, uint32_t limit)const;
+
+      /** Lists all stock assets registered on the blockchain.
+       *
+       * @param limit the maximum number of assets to return (max: 100)
+       * @returns the list of stock asset objects, ordered by symbol
+       */
+      vector<asset_object>              list_stock_assets(uint32_t limit)const;
+
       /** Returns assets count registered on the blockchain.
        * 
        * @returns assets count
@@ -1835,6 +1843,7 @@ FC_API( graphene::wallet::wallet_api,
         (list_accounts)
         (list_account_balances)
         (list_assets)
+        (list_stock_assets)
         (get_asset_count)
         (import_key)
         (import_accounts)

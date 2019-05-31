@@ -101,6 +101,7 @@ class database_api_impl : public std::enable_shared_from_this<database_api_impl>
       asset_id_type get_asset_id_from_string(const std::string& symbol_or_id)const;
       vector<optional<asset_object>> get_assets(const vector<std::string>& asset_symbols_or_ids)const;
       vector<asset_object>           list_assets(const string& lower_bound_symbol, uint32_t limit)const;
+      vector<asset_object>           list_stock_assets(uint32_t limit)const;
       vector<optional<asset_object>> lookup_asset_symbols(const vector<string>& symbols_or_ids)const;
       uint64_t                       get_asset_count()const;
       vector<asset_object>           get_assets_by_issuer(const std::string& issuer_name_or_id,
@@ -1304,6 +1305,35 @@ vector<asset_object> database_api_impl::list_assets(const string& lower_bound_sy
 
    while(limit-- && itr != assets_by_symbol.end())
       result.emplace_back(*itr++);
+
+   return result;
+}
+
+vector<asset_object> database_api::list_stock_assets(uint32_t limit)const
+{
+    return my->list_stock_assets(limit);
+}
+
+vector<asset_object> database_api_impl::list_stock_assets(uint32_t limit)const
+{
+   FC_ASSERT( limit <= 101 );
+   vector<asset_object> result;
+   result.reserve(limit);
+   const auto& assets_by_symbol = _db.get_index_type<asset_index>().indices().get<by_symbol>();
+
+   for(auto itr = assets_by_symbol.begin();
+       limit && itr != assets_by_symbol.end(); itr++)
+   {
+       if(itr->options.extensions.value.revenue_assets.valid())
+       {
+          auto rev_asset = *itr->options.extensions.value.revenue_assets;
+          if(!rev_asset.empty())
+          {
+              limit--;
+              result.emplace_back(*itr);
+          }
+       }
+   }
 
    return result;
 }
